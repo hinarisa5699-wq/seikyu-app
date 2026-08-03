@@ -731,7 +731,7 @@ const DOC_TYPES_NORMAL=[
   {key:'ryoshu',label:'領収書',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
 ];
 const DOC_TYPES_SEIHO=[
-  {key:'mitsumori_s',label:'見積書（1ヶ月フル予測）',suffix:'M',docTitle:'見 積 書',desc:'1ヶ月あたりにかかる総額を予測して提示'},
+  {key:'mitsumori_s',label:'見積書（1ヶ月フル予測・援護課提出用）',suffix:'M',docTitle:'見 積 書',desc:'援護課へ提出する、1ヶ月あたりの費用予測（宛名は自動で援護課・御中）'},
   {key:'engo',label:'援護課あて（家賃分）',suffix:'G',docTitle:'請 求 書',desc:'住宅使用料（家賃分）。援護課へ送る書類'},
   {key:'honnin',label:'ご本人あて請求書（家賃以外）',suffix:'H',docTitle:'請 求 書',desc:'食費・おやつ・生活支援・光熱費など、家賃以外の本当の請求書'},
   {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
@@ -1017,6 +1017,7 @@ function buildDoc(r,typeKey){
   const daysMove=move?moveInDays(move):0;
   // 宛先の既定
   if(typeKey==='engo'){to=state.settings.bank.engo||r.billto||'';keisho='御中';}
+  else if(typeKey==='mitsumori_s'){to=state.settings.bank.engo||r.billto||'';keisho='御中';} // 援護課へ提出用
   else if(typeKey==='ryoshu_engo'){to=state.settings.bank.engo||r.billto||'';keisho='御中';}
   else if(typeKey==='honnin'){to=(r.atesaki==='ご家族'&&r.family)?r.family:r.name;keisho='様';}
   else if(typeKey==='ryoshu'){to=(r.atesaki==='ご家族'&&r.family)?r.family:(isSeiho?r.name:(r.billto||r.name));keisho=to.includes('課')?'御中':'様';}
@@ -1050,7 +1051,7 @@ function buildDoc(r,typeKey){
     // 初回のみ
     items.push(nyuLine(),kasaiLine());
     dueLabel='お振込期限';due=move?addMonths(move,1):endOfMonth(issue);
-    notes=['本見積は1ヶ月あたりにかかる費用の予測です（食費は '+yosoku+'日 で試算）。',
+    notes=['本見積書は援護課へご提出用の、1ヶ月あたりにかかる費用の予測です（食費は '+yosoku+'日 で試算）。',
       '入居金・火災保険料は初回のみ（日割対象外）。家賃・火災保険料・入居金は非課税、食費・生活支援サービス費・光熱費は課税。',
       '家賃分は援護課（住宅扶助）へ、家賃以外はご本人へご請求します。','光熱費は実費・概算です。'];
   }else if(typeKey==='seikyu_nyukin'){ // 入居金請求
