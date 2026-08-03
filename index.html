@@ -728,6 +728,7 @@ const DOC_TYPES_NORMAL=[
   {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
   {key:'seikyu_yachin',label:'請求書（家賃時・月次）',suffix:'R',docTitle:'請 求 書',desc:'家賃・共益費・食費・生活支援の日割／月次'},
   {key:'karioosae',label:'仮押さえ請求書',suffix:'K',docTitle:'請 求 書',desc:'家賃1ヶ月分の前金（お部屋の確保）'},
+  {key:'otameshi',label:'お試し入居 請求書（短期）',suffix:'T',docTitle:'請 求 書',desc:'例：2泊3日。住居費の日割＋食事＋デイ＋訪問介護（自費）。数量は編集で自動再計算'},
   {key:'ryoshu',label:'領収書',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
 ];
 const DOC_TYPES_SEIHO=[
@@ -736,6 +737,7 @@ const DOC_TYPES_SEIHO=[
   {key:'honnin',label:'ご本人あて請求書（家賃以外）',suffix:'H',docTitle:'請 求 書',desc:'食費・おやつ・生活支援・光熱費など、家賃以外の本当の請求書'},
   {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
   {key:'ryoshu_engo',label:'領収書（援護課あて・家賃分）',suffix:'Y',docTitle:'領 収 書',desc:'援護課からの家賃（住宅使用料）入金に対する領収書'},
+  {key:'otameshi',label:'お試し入居 請求書（短期）',suffix:'T',docTitle:'請 求 書',desc:'例：2泊3日。住居費の日割＋食事＋デイ＋訪問介護（自費）。数量は編集で自動再計算'},
   {key:'ryoshu',label:'領収書（ご本人あて）',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
 ];
 const DOC_TYPES_GAIBU=[
@@ -1010,7 +1012,7 @@ function buildDoc(r,typeKey){
   const monthD=parseD(monthStr+'-01');
   const issue=parseD($('createIssue').value||todayStr());
   const isSeiho=r.kubun==='生保';
-  const rent=effRent(r),kyo=effKyo(r),sup=effSup(r);
+  const rent=effRent(r),kyo=effKyo(r),sup=effSup(r);const m=state.settings.meals;
   const types=r.external?DOC_TYPES_GAIBU:(isSeiho?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL);
   const t=types.find(x=>x.key===typeKey)||DOC_TYPES_NORMAL.find(x=>x.key===typeKey)||DOC_TYPES_GAIBU.find(x=>x.key===typeKey);
   let items=[],notes=[],dueLabel='お支払期限',due=null,showBank=true,lead='',subGroups=null,to='',keisho='御中',tanto='';
@@ -1111,6 +1113,30 @@ function buildDoc(r,typeKey){
     notes=['本請求はデイサービスご利用時の食事代です（入居に伴う家賃・共益費等はありません）。',
       '食費は非課税。',
       (mImpG?'食費は '+monthStr+' の喫食実績（食事CSV取込）に基づく実額です。':'食費は各食の単価×回数で計算しています。')];
+  }else if(typeKey==='otameshi'){ // お試し入居（短期利用）
+    const cd=daysInMonth(monthD||issue); // 当月実日数
+    const days=3; // 利用日数（例：2泊3日）既定
+    const kyoT=(kyo&&kyo>0)?kyo:30000;
+    lead='下記のとおりご請求申し上げます。【お試し入居（短期利用・例：2泊3日）】';
+    items=[
+      {name:'家賃', tanka:rent, qty:days, kijun:cd, amount:hiwari(rent,days,cd), tekiyo:'住居費の日割り（月額÷当月日数×利用日数・非課税）', inc:true},
+      {name:'生活支援サービス費', tanka:sup, qty:days, kijun:cd, amount:hiwari(sup,days,cd), tekiyo:'日割り（税込）', inc:true},
+      {name:'共益費', tanka:kyoT, qty:days, kijun:cd, amount:hiwari(kyoT,days,cd), tekiyo:'日割り（非課税）', inc:true},
+      {name:'朝食', tanka:350, qty:2, kijun:'回', amount:700, tekiyo:'宿泊分（食事200＋配膳150）', inc:true},
+      {name:'昼食', tanka:500, qty:2, kijun:'回', amount:1000, tekiyo:'宿泊分', inc:true},
+      {name:'夕食', tanka:500, qty:2, kijun:'回', amount:1000, tekiyo:'宿泊分', inc:true},
+      {name:'おやつ', tanka:200, qty:1, kijun:'回', amount:200, tekiyo:'宿泊分', inc:true},
+      {name:'デイサービス 基本利用料（1日・自費）', tanka:8070, qty:1, kijun:'日', amount:8070, tekiyo:'デイ通所・自費（実績に合わせて編集）', inc:true},
+      {name:'機能訓練（自費）', tanka:600, qty:1, kijun:'回', amount:600, tekiyo:'回数要確認', inc:true},
+      {name:'入浴介助（自費）', tanka:400, qty:1, kijun:'回', amount:400, tekiyo:'回数要確認', inc:true},
+      {name:'訪問介護（身体・アロハクラブ自費／30分）', tanka:2640, qty:3, kijun:'回', amount:2640*3, tekiyo:'アロハクラブ自費 8-18時30分2,640円（時間帯・回数で編集）', inc:true}
+    ];
+    dueLabel='お支払期限';due=endOfMonth(monthD||issue);
+    notes=['本請求はお試し入居（短期利用）分です。日数・回数・単価は実際に合わせて編集してください（数量を直すと金額が自動再計算されます）。',
+      '住居費は当月実日数（'+cd+'日）で日割り（月額÷当月日数×利用日数、円未満切捨）。既定は2泊3日（利用日数3日）です。',
+      '家賃・共益費は非課税、生活支援・食事・デイ・訪問介護は税込表示（消費税0円計上）。',
+      '訪問介護はアロハクラブ自費：身体介助30分＝8-18時2,640円／早朝・夜間(6-8時,18-22時)3,301円／深夜(22-6時)3,962円。以降10分ごと延長（880円/1,100円/1,320円）。家事援助30分1,500円。',
+      'デイの基本利用料・機能訓練・入浴、訪問の時間帯・回数は要確認です。'];
   }else if(typeKey==='ryoshu'||typeKey==='ryoshu_engo'){ // 領収書
     lead='';showBank=false;dueLabel='';
     items=[];
