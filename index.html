@@ -109,6 +109,7 @@ table.data tr:hover td{background:#fafcfe}
   #printArea{display:block;position:absolute;left:0;top:0;width:100%}
   .doc{width:100%;margin:0;padding:8mm 10mm;page-break-after:always}
   .sfdoc{width:100%;margin:0;padding:14mm 16mm;min-height:auto}
+  .scdoc{width:100%;margin:0;padding:14mm 16mm}
   @page{size:A4;margin:0}
 }
 .empty{text-align:center;color:var(--sub);padding:30px}
@@ -137,6 +138,19 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
 .sfdoc .sf-ijou{text-align:right}
 .sfdoc .foldline{position:absolute;left:0;width:6mm;border-top:1px dashed #cc0000;opacity:.6}
 .sfdoc .foldline::after{content:'折';position:absolute;left:7mm;top:-9px;font-size:8px;color:#cc0000}
+/* ===== スケジュール表 ===== */
+.scdoc{background:#fff;width:190mm;margin:0 auto;padding:14mm 16mm 16mm;color:#000;font-size:13px;line-height:1.6}
+.scdoc .sc-title{text-align:center;font-size:22px;font-weight:800;letter-spacing:4px;margin:0 0 6px}
+.scdoc .sc-sub{text-align:center;font-size:13px;color:#333;margin-bottom:4px}
+.scdoc .sc-meta{text-align:right;font-size:12px;margin-bottom:10px}
+.scdoc table.sc-tbl{width:100%;border-collapse:collapse;margin-top:6px}
+.scdoc table.sc-tbl th,.scdoc table.sc-tbl td{border:1px solid #444;padding:6px 8px;font-size:12.5px;vertical-align:top}
+.scdoc table.sc-tbl th{background:#eee;text-align:center}
+.scdoc table.sc-tbl td.c{text-align:center;white-space:nowrap}
+.scdoc .sc-day td{background:#f3f7fb;font-weight:700}
+.scdoc .sc-notes{margin-top:12px;font-size:11.5px;color:#222}
+.scdoc .sc-notes b{font-size:12.5px}
+.scdoc .sc-notes div{margin:2px 0}
 </style>
 </head>
 <body>
@@ -152,6 +166,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <button data-tab="history">履歴</button>
   <button data-tab="payments">入金確認</button>
   <button data-tab="soufu">送付状</button>
+  <button data-tab="schedule">予定表</button>
   <button data-tab="settings">設定</button>
 </nav>
 <main>
@@ -348,6 +363,46 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     <div class="card">
       <h3>プレビュー</h3>
       <div id="sf_previewWrap"><div id="sf_preview"></div></div>
+    </div>
+  </section>
+
+  <!-- SCHEDULE -->
+  <section id="tab-schedule" style="display:none">
+    <div class="card">
+      <h2>🗓 ご利用スケジュール表の作成</h2>
+      <p class="muted">お試し入居などの予定表を作れます。見本（2泊3日）が入っているので、日付・時間・内容を編集してください。行の追加・削除もできます。</p>
+      <label>入居者・利用者を選ぶ（お名前を自動入力）</label>
+      <select id="sc_resident" onchange="scheduleLoadResident()"><option value="">— 選択 —</option></select>
+      <div class="grid3">
+        <div><label>タイトル</label><input id="sc_title" value="ご利用スケジュール表"></div>
+        <div><label>お名前</label><input id="sc_name" placeholder="例：縣 秀子"></div>
+        <div><label>期間・副題</label><input id="sc_period" value="2泊3日"></div>
+      </div>
+      <div class="grid2">
+        <div><label>提供事業所</label><input id="sc_facility" value="アロハデイサービス"></div>
+        <div><label>発行日</label><input type="date" id="sc_issue"></div>
+      </div>
+      <h3>予定（日付／時間／予定・内容）</h3>
+      <table class="itemtable" id="sc_rows">
+        <thead><tr><th style="width:110px">日付</th><th style="width:110px">時間</th><th>予定・内容</th><th style="width:40px"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="row-actions">
+        <button class="btn sec sm" onclick="scheduleAddRow()">＋ 行を追加</button>
+        <button class="btn sec sm" onclick="scheduleResetTemplate()">見本（2泊3日）に戻す</button>
+      </div>
+      <label style="margin-top:10px">備考</label>
+      <textarea id="sc_notes" style="min-height:80px">・食事（昼・夕）およびおやつは、デイサービスの場所にて提供します。
+・服薬は袋を開けてお渡しし、ヘルパーが服用の声かけ・介助を行います。
+・日付・時間はご利用予定であり、当日の状況により前後する場合があります。</textarea>
+      <div class="row-actions">
+        <button class="btn" onclick="printSchedule()">🖨 印刷 / PDF保存</button>
+        <button class="btn sec" onclick="renderSchedulePreview()">プレビュー更新</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>プレビュー</h3>
+      <div id="sc_preview"></div>
     </div>
   </section>
 
@@ -647,7 +702,7 @@ function disconnectGithub(){github={owner:'',repo:'',branch:'main',path:'data.js
    ============================================================ */
 function go(tab){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  ['home','residents','create','mealcsv','history','payments','soufu','settings'].forEach(t=>$('tab-'+t).style.display=(t===tab?'':'none'));
+  ['home','residents','create','mealcsv','history','payments','soufu','schedule','settings'].forEach(t=>$('tab-'+t).style.display=(t===tab?'':'none'));
   if(tab==='home')renderHome();
   if(tab==='residents')renderResidents();
   if(tab==='create')renderCreate();
@@ -655,6 +710,7 @@ function go(tab){
   if(tab==='history')renderHistory();
   if(tab==='payments')renderPayments();
   if(tab==='soufu')renderSoufu();
+  if(tab==='schedule')renderSchedule();
   if(tab==='settings')fillSettingsForm();
   window.scrollTo(0,0);
 }
@@ -1464,6 +1520,68 @@ function soufuHTML(){
 }
 function renderSoufuPreview(){$('sf_preview').innerHTML=soufuHTML();const h=$('sf_winHint');if(h)h.style.display=$('sf_win').checked?'':'none';}
 function printSoufu(){$('printArea').innerHTML=soufuHTML();window.print();}
+
+/* ============================================================
+   スケジュール表
+   ============================================================ */
+function scheduleTemplate(){return [
+  {d:'1日目', t:'9:00', c:'アロハデイサービス開始'},
+  {d:'', t:'日中', c:'昼食・おやつはデイサービスにて提供'},
+  {d:'', t:'日中', c:'入浴・機能訓練'},
+  {d:'', t:'〜16:00', c:'レクリエーション 等'},
+  {d:'', t:'16:00', c:'職員と居室へ戻る／お部屋の説明'},
+  {d:'2日目', t:'朝', c:'起床・朝食'},
+  {d:'', t:'10:00', c:'ヘルパー訪問：服薬の呼びかけ（袋を開けて服用介助）'},
+  {d:'', t:'昼', c:'昼食（デイサービスの場所にて）／ヘルパーお迎え'},
+  {d:'', t:'13:00', c:'ヘルパー訪問：散歩、レクなど'},
+  {d:'', t:'17:30', c:'夕食（デイサービスの場所にて）／ヘルパーお迎え'},
+  {d:'3日目', t:'朝', c:'朝食（配膳）'},
+  {d:'', t:'9:45', c:'ヘルパーがデイサービスへお連れして帰りの準備'},
+  {d:'', t:'10:00頃', c:'ご家族お迎え（退所）'}
+];}
+let schedRows=null;
+function renderSchedule(){
+  const sel=$('sc_resident');const cur=sel.value;
+  sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}（${r.external?'外部':r.kubun}${r.room?'・'+esc(r.room):''}）</option>`).join('');
+  sel.value=cur;
+  if(!$('sc_issue').value)$('sc_issue').value=todayStr();
+  if(!schedRows)schedRows=scheduleTemplate();
+  renderSchedRows();renderSchedulePreview();
+}
+function renderSchedRows(){
+  const tb=$('sc_rows').querySelector('tbody');
+  tb.innerHTML=schedRows.map((r,i)=>`<tr>
+    <td><input value="${esc(r.d)}" onchange="schedChange(${i},'d',this.value)"></td>
+    <td><input value="${esc(r.t)}" onchange="schedChange(${i},'t',this.value)"></td>
+    <td><input value="${esc(r.c)}" onchange="schedChange(${i},'c',this.value)"></td>
+    <td class="c"><button class="btn danger sm" onclick="schedDelRow(${i})">×</button></td></tr>`).join('');
+}
+function schedChange(i,k,v){schedRows[i][k]=v;renderSchedulePreview();}
+function scheduleAddRow(){schedRows.push({d:'',t:'',c:''});renderSchedRows();renderSchedulePreview();}
+function schedDelRow(i){schedRows.splice(i,1);renderSchedRows();renderSchedulePreview();}
+function scheduleResetTemplate(){if(!confirm('見本（2泊3日）に戻します。今の内容は消えます。よろしいですか？'))return;schedRows=scheduleTemplate();renderSchedRows();renderSchedulePreview();}
+function scheduleLoadResident(){const r=state.residents.find(x=>x.id===$('sc_resident').value);if(r){$('sc_name').value=r.name||'';}renderSchedulePreview();}
+function scheduleHTML(){
+  const title=$('sc_title').value, name=$('sc_name').value, period=$('sc_period').value, fac=$('sc_facility').value;
+  const issue=parseD($('sc_issue').value)||parseD(todayStr());
+  const notes=($('sc_notes').value||'').split('\n').filter(x=>x.trim());
+  const rows=schedRows.map(r=>{
+    const isDay=String(r.d).trim()&&!String(r.t).trim()&&!String(r.c).trim();
+    return `<tr class="${(String(r.d).trim())?'sc-day':''}"><td class="c">${esc(r.d)}</td><td class="c">${esc(r.t)}</td><td>${esc(r.c)}</td></tr>`;
+  }).join('');
+  return `<div class="scdoc">
+    <div class="sc-title">${esc(title||'ご利用スケジュール表')}${period?'（'+esc(period)+'）':''}</div>
+    <div class="sc-sub">${esc(name)}${name?' 様':''}${fac?'　／　'+esc(fac):''}</div>
+    <div class="sc-meta">発行日：${esc(fmtWareki(issue))}　${esc(state.settings.company.housing)}</div>
+    <table class="sc-tbl">
+      <thead><tr><th style="width:70px">日付</th><th style="width:70px">時間</th><th>予定・内容</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${notes.length?`<div class="sc-notes"><b>【備考】</b>${notes.map(n=>`<div>${esc(n.replace(/^・/,'・'))}</div>`).join('')}</div>`:''}
+  </div>`;
+}
+function renderSchedulePreview(){$('sc_preview').innerHTML=scheduleHTML();}
+function printSchedule(){$('printArea').innerHTML=scheduleHTML();window.print();}
 function viewDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;$('view_preview').innerHTML=docHTML(d);openModal('viewModal');window._printDoc=d;}
 function reopenDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;currentDoc=JSON.parse(JSON.stringify(d));fillDocForm();openModal('docModal');renderDocPreview();}
 function delDoc(id){if(!confirm('この書類を削除しますか？'))return;state.documents=state.documents.filter(x=>x.id!==id);persist();renderHistory();}
