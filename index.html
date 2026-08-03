@@ -108,6 +108,7 @@ table.data tr:hover td{background:#fafcfe}
   #printArea,#printArea *{visibility:visible}
   #printArea{display:block;position:absolute;left:0;top:0;width:100%}
   .doc{width:100%;margin:0;padding:8mm 10mm;page-break-after:always}
+  .sfdoc{width:100%;margin:0;padding:14mm 16mm;min-height:auto}
   @page{size:A4;margin:0}
 }
 .empty{text-align:center;color:var(--sub);padding:30px}
@@ -118,6 +119,24 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
 #mc_drop.drag{background:#cfe6fb;border-color:var(--brand-d);transform:scale(1.01)}
 #mc_drop .big{font-size:16px}
 #mc_drop .muted{font-weight:400;margin-top:6px;font-size:13px}
+/* ===== 送付状 ===== */
+.sfdoc{background:#fff;width:190mm;margin:0 auto;padding:14mm 16mm 16mm;color:#000;font-size:13px;line-height:1.9;position:relative;min-height:250mm}
+.sfdoc .sf-topright{position:absolute;top:14mm;right:16mm;text-align:right;font-size:12px;line-height:1.6}
+.sfdoc .sf-topright .big{font-size:14px;font-weight:700}
+.sfdoc .sf-addr{position:absolute;left:24mm}
+.sfdoc .sf-zip{font-size:14px;letter-spacing:1px}
+.sfdoc .sf-address{font-size:15px;margin-top:3px}
+.sfdoc .sf-names{margin-top:8px;font-size:18px;font-weight:700}
+.sfdoc .sf-names span{margin-right:16px;white-space:nowrap}
+.sfdoc .sf-subject{text-align:center;font-size:18px;font-weight:800;letter-spacing:3px;margin:6px 0 14px;text-decoration:underline}
+.sfdoc .sf-body{white-space:pre-wrap;margin-bottom:12px}
+.sfdoc .sf-ki{text-align:center;font-weight:700;margin:12px 0 6px;letter-spacing:2px}
+.sfdoc table.sf-list{width:75%;margin:0 auto 8px;border-collapse:collapse}
+.sfdoc table.sf-list th,.sfdoc table.sf-list td{border:1px solid #333;padding:6px 10px;font-size:13px;text-align:center}
+.sfdoc table.sf-list th{background:#eee}
+.sfdoc .sf-ijou{text-align:right}
+.sfdoc .foldline{position:absolute;left:0;width:6mm;border-top:1px dashed #cc0000;opacity:.6}
+.sfdoc .foldline::after{content:'折';position:absolute;left:7mm;top:-9px;font-size:8px;color:#cc0000}
 </style>
 </head>
 <body>
@@ -132,6 +151,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <button data-tab="mealcsv">食事CSV</button>
   <button data-tab="history">履歴</button>
   <button data-tab="payments">入金確認</button>
+  <button data-tab="soufu">送付状</button>
   <button data-tab="settings">設定</button>
 </nav>
 <main>
@@ -276,6 +296,58 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <tbody></tbody>
       </table>
       <div id="payEmpty" class="empty">対象の請求書がありません。</div>
+    </div>
+  </section>
+
+  <!-- SOUFU (cover letter) -->
+  <section id="tab-soufu" style="display:none">
+    <div class="card">
+      <h2>✉️ 送付状の作成</h2>
+      <p class="muted">請求書などに添える送付状を作ります。<b>窓付き封筒（長形3号）</b>で郵送する前提で、A4を<b>三つ折り</b>にすると宛先が窓から見える配置で印刷できます。</p>
+      <label>入居者を選ぶ（宛先を自動入力）</label>
+      <select id="sf_resident" onchange="soufuLoadResident()"><option value="">— 選択 —</option></select>
+      <div class="grid2">
+        <div><label>郵便番号</label><input id="sf_zip" placeholder="例：154-0017"></div>
+        <div><label>発行日</label><input type="date" id="sf_issue"></div>
+      </div>
+      <label>ご住所</label><input id="sf_addr" placeholder="例：東京都世田谷区世田谷1-14-12-2">
+      <div class="grid2">
+        <div><label>宛名1</label><input id="sf_name1" placeholder="例：新城 早苗"></div>
+        <div><label>宛名2（連名・任意）</label><input id="sf_name2" placeholder="例：谷川 奈津美"></div>
+      </div>
+      <div class="grid2">
+        <div><label>敬称</label><select id="sf_keisho"><option>様</option><option>御中</option></select></div>
+        <div><label>電話（控え・任意／送付状には印字しません）</label><input id="sf_tel" placeholder="例：090-1602-2996"></div>
+      </div>
+      <label>件名</label><input id="sf_subject" value="書類ご送付のご案内">
+      <label>本文（挨拶）</label>
+      <textarea id="sf_body" style="min-height:70px">拝啓　時下ますますご清祥のこととお慶び申し上げます。平素は格別のご高配を賜り、厚く御礼申し上げます。
+さて、下記のとおり書類をご送付申し上げますので、ご査収のほどよろしくお願い申し上げます。</textarea>
+      <h3>同封書類</h3>
+      <table class="itemtable" id="sf_items">
+        <thead><tr><th>書類名</th><th style="width:90px">部数</th><th style="width:40px"></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="row-actions">
+        <button class="btn sec sm" onclick="soufuAddItem()">＋ 行を追加</button>
+        <button class="btn sec sm" onclick="soufuFillFromHistory()">この方の請求書から自動追加</button>
+      </div>
+      <label style="margin-top:10px">結び</label>
+      <input id="sf_close" value="以上、よろしくお願い申し上げます。">
+      <div class="grid2">
+        <div><label class="flexwrap"><input type="checkbox" id="sf_win" checked style="width:auto" onchange="renderSoufuPreview()"> 窓付き封筒用に宛先を配置する</label></div>
+        <div><label>窓位置の微調整（上マージン mm）</label><input type="number" id="sf_wintop" value="52" oninput="renderSoufuPreview()"></div>
+      </div>
+      <div class="row-actions">
+        <button class="btn" onclick="soufuSaveMailing()">宛先を保存</button>
+        <button class="btn" onclick="printSoufu()">🖨 印刷 / PDF保存</button>
+        <button class="btn sec" onclick="renderSoufuPreview()">プレビュー更新</button>
+      </div>
+      <div class="hint" id="sf_winHint">💡 窓付き封筒（長形3号）：印刷したA4を<b>下から1/3を折り上げ→上から1/3を折り下げ</b>の三つ折りにすると、宛先が窓に入ります。位置がずれる場合は上の「上マージン」を調整してください。</div>
+    </div>
+    <div class="card">
+      <h3>プレビュー</h3>
+      <div id="sf_previewWrap"><div id="sf_preview"></div></div>
     </div>
   </section>
 
@@ -484,6 +556,7 @@ function defaultState(){return{
   residents:[],
   documents:[],
   mealData:{},
+  mailing:{},
   counters:{byYm:{},batch:{}}
 };}
 let state=defaultState();
@@ -513,7 +586,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','
    保存 / 読込（ローカル＋GitHub）
    ============================================================ */
 function saveLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}}
-function loadLocal(){try{const s=localStorage.getItem(LS_KEY);if(s){state=Object.assign(defaultState(),JSON.parse(s));state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};}}catch(e){}}
+function loadLocal(){try{const s=localStorage.getItem(LS_KEY);if(s){state=Object.assign(defaultState(),JSON.parse(s));state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};state.mailing=state.mailing||{};}}catch(e){}}
 function loadCfg(){try{const c=localStorage.getItem(LS_CFG);if(c){Object.assign(github,JSON.parse(c));}}catch(e){}}
 function saveCfg(){try{localStorage.setItem(LS_CFG,JSON.stringify({owner:github.owner,repo:github.repo,branch:github.branch,path:github.path,token:github.token}));}catch(e){}}
 
@@ -534,7 +607,7 @@ async function pullNow(){
     if(!r.ok){throw new Error('HTTP '+r.status);}
     const j=await r.json();github.sha=j.sha;
     const data=JSON.parse(b64ToUtf8(j.content));
-    state=Object.assign(defaultState(),data);state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};
+    state=Object.assign(defaultState(),data);state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};state.mailing=state.mailing||{};
     github.connected=true;saveLocal();renderAll();
     setSync(true,'クラウドと同期済み（最終読込 '+new Date().toLocaleTimeString('ja-JP')+'）');
   }catch(e){setSync(false,'読込エラー：'+e.message);}
@@ -573,13 +646,14 @@ function disconnectGithub(){github={owner:'',repo:'',branch:'main',path:'data.js
    ============================================================ */
 function go(tab){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  ['home','residents','create','mealcsv','history','payments','settings'].forEach(t=>$('tab-'+t).style.display=(t===tab?'':'none'));
+  ['home','residents','create','mealcsv','history','payments','soufu','settings'].forEach(t=>$('tab-'+t).style.display=(t===tab?'':'none'));
   if(tab==='home')renderHome();
   if(tab==='residents')renderResidents();
   if(tab==='create')renderCreate();
   if(tab==='mealcsv')renderMealCsv();
   if(tab==='history')renderHistory();
   if(tab==='payments')renderPayments();
+  if(tab==='soufu')renderSoufu();
   if(tab==='settings')fillSettingsForm();
   window.scrollTo(0,0);
 }
@@ -1229,6 +1303,91 @@ function renderPayments(){
 }
 function setPaidDate(id,v){const d=state.documents.find(x=>x.id===id);if(!d)return;d.paidDate=v;if(v)d.paid=true;persist();renderPayments();}
 function togglePaid(id,val){const d=state.documents.find(x=>x.id===id);if(!d)return;d.paid=val;if(val&&!d.paidDate)d.paidDate=todayStr();if(!val)d.paidDate='';persist();renderPayments();}
+
+/* ============================================================
+   送付状（カバーレター）
+   ============================================================ */
+let sfItems=[];
+function renderSoufu(){
+  const sel=$('sf_resident');const cur=sel.value;
+  sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}（${r.kubun}${r.room?'・'+esc(r.room):''}）</option>`).join('');
+  sel.value=cur;
+  if(!$('sf_issue').value)$('sf_issue').value=todayStr();
+  if(!sfItems.length)sfItems=[{name:'請求書',qty:1}];
+  renderSoufuItems();renderSoufuPreview();
+}
+function renderSoufuItems(){
+  const tb=$('sf_items').querySelector('tbody');
+  tb.innerHTML=sfItems.map((it,i)=>`<tr>
+    <td><input value="${esc(it.name)}" onchange="sfItemChange(${i},'name',this.value)"></td>
+    <td><input value="${esc(it.qty)}" onchange="sfItemChange(${i},'qty',this.value)"></td>
+    <td class="c"><button class="btn danger sm" onclick="sfDelItem(${i})">×</button></td></tr>`).join('');
+}
+function sfItemChange(i,k,v){sfItems[i][k]=v;renderSoufuPreview();}
+function soufuAddItem(){sfItems.push({name:'',qty:1});renderSoufuItems();renderSoufuPreview();}
+function sfDelItem(i){sfItems.splice(i,1);renderSoufuItems();renderSoufuPreview();}
+function soufuLoadResident(){
+  const r=state.residents.find(x=>x.id===$('sf_resident').value);if(!r){return;}
+  const m=(state.mailing&&state.mailing[r.id])||{};
+  $('sf_zip').value=m.zip||'';
+  $('sf_addr').value=m.addr||'';
+  $('sf_name1').value=m.name1||r.name||'';
+  $('sf_name2').value=m.name2||'';
+  $('sf_tel').value=m.tel||r.tanto||'';
+  renderSoufuPreview();
+}
+function soufuSaveMailing(){
+  const id=$('sf_resident').value;if(!id){alert('先に入居者を選んでください。');return;}
+  state.mailing[id]={zip:$('sf_zip').value.trim(),addr:$('sf_addr').value.trim(),name1:$('sf_name1').value.trim(),name2:$('sf_name2').value.trim(),tel:$('sf_tel').value.trim()};
+  persist();alert('宛先を保存しました。次回この入居者を選ぶと自動で入ります。');
+}
+function soufuFillFromHistory(){
+  const r=state.residents.find(x=>x.id===$('sf_resident').value);
+  let docs=state.documents.filter(d=>d.typeKey!=='mitsumori'&&d.typeKey!=='mitsumori_s');
+  if(r)docs=docs.filter(d=>d.residentId===r.id);
+  docs=docs.sort((a,b)=>b.issue.localeCompare(a.issue)).slice(0,4);
+  if(!docs.length){alert('対象の書類がありません。');return;}
+  sfItems=docs.map(d=>({name:d.typeLabel+'（'+d.number+'）',qty:1}));
+  renderSoufuItems();renderSoufuPreview();
+}
+function soufuHTML(){
+  const c=state.settings.company;
+  const win=$('sf_win').checked;
+  const wintop=Math.max(0,+$('sf_wintop').value||0);
+  const zip=$('sf_zip').value.trim(),addr=$('sf_addr').value.trim();
+  const n1=$('sf_name1').value.trim(),n2=$('sf_name2').value.trim(),kei=$('sf_keisho').value;
+  const issue=parseD($('sf_issue').value)||parseD(todayStr());
+  const subject=$('sf_subject').value,body=$('sf_body').value,closeTxt=$('sf_close').value;
+  const names=[n1,n2].filter(Boolean).map(n=>`<span>${esc(n)}　${esc(kei)}</span>`).join('');
+  const addrTop=win?wintop:42;
+  const mainPad=addrTop+34;
+  const listRows=sfItems.filter(x=>String(x.name).trim()).map(x=>`<tr><td>${esc(x.name)}</td><td>${esc(x.qty)}部</td></tr>`).join('')||'<tr><td>請求書</td><td>1部</td></tr>';
+  return `<div class="sfdoc">
+    ${win?'<div class="foldline" style="top:99mm"></div><div class="foldline" style="top:198mm"></div>':''}
+    <div class="sf-topright">
+      <div>${esc(fmtWareki(issue))}</div>
+      <div class="big">${esc(c.housing)}</div>
+      <div>${esc(c.corp)}</div>
+      <div>${esc(c.addr)}</div>
+      <div>${esc(c.tel)}</div>
+    </div>
+    <div class="sf-addr" style="top:${addrTop}mm">
+      ${zip?`<div class="sf-zip">〒${esc(zip)}</div>`:''}
+      <div class="sf-address">${esc(addr)}</div>
+      <div class="sf-names">${names}</div>
+    </div>
+    <div class="sf-main" style="padding-top:${mainPad}mm">
+      <div class="sf-subject">${esc(subject)}</div>
+      <div class="sf-body">${esc(body)}</div>
+      <div class="sf-ki">記</div>
+      <table class="sf-list"><thead><tr><th>書類名</th><th>部数</th></tr></thead><tbody>${listRows}</tbody></table>
+      <div class="sf-ijou">${esc(closeTxt)}</div>
+      <div class="sf-ijou" style="margin-top:4px">以上</div>
+    </div>
+  </div>`;
+}
+function renderSoufuPreview(){$('sf_preview').innerHTML=soufuHTML();const h=$('sf_winHint');if(h)h.style.display=$('sf_win').checked?'':'none';}
+function printSoufu(){$('printArea').innerHTML=soufuHTML();window.print();}
 function viewDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;$('view_preview').innerHTML=docHTML(d);openModal('viewModal');window._printDoc=d;}
 function reopenDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;currentDoc=JSON.parse(JSON.stringify(d));fillDocForm();openModal('docModal');renderDocPreview();}
 function delDoc(id){if(!confirm('この書類を削除しますか？'))return;state.documents=state.documents.filter(x=>x.id!==id);persist();renderHistory();}
@@ -1292,7 +1451,7 @@ function exportBackup(){
 }
 function importBackup(e){
   const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{try{state=Object.assign(defaultState(),JSON.parse(rd.result));state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};persist();renderAll();alert('読み込みました。');}catch(err){alert('読込に失敗しました：'+err.message);}};
+  rd.onload=()=>{try{state=Object.assign(defaultState(),JSON.parse(rd.result));state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};state.mailing=state.mailing||{};persist();renderAll();alert('読み込みました。');}catch(err){alert('読込に失敗しました：'+err.message);}};
   rd.readAsText(f);
 }
 
