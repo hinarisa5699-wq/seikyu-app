@@ -464,6 +464,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <div><label>区分</label><select id="rm_kubun"><option value="通常">通常</option><option value="生保">生保（生活保護）</option></select></div>
       <div><label>入居日</label><input type="date" id="rm_movein"></div>
     </div>
+    <label class="flexwrap" style="background:#fff7e6;border:1px solid #ffe58f;border-radius:8px;padding:8px 10px;margin-top:8px"><input type="checkbox" id="rm_external" style="width:auto"> <b>外部利用者（デイのみ・入居なし）</b>　※家賃・共益費・生活支援は請求せず、食事代のみ請求します</label>
     <div class="grid2">
       <div><label>請求先（宛先）</label><input id="rm_billto" placeholder="例：ご家族名／町田市 生活援護課"></div>
       <div><label>ご担当者・ご家族</label><input id="rm_tanto"></div>
@@ -679,8 +680,8 @@ function renderResidents(){
   const tb=$('residentTable').querySelector('tbody');
   tb.innerHTML=state.residents.map(r=>`<tr>
     <td>${esc(r.name)}</td><td>${esc(r.room||'')}</td>
-    <td><span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span></td>
-    <td>${num(effRent(r))}</td><td>${esc(r.billto||'')}</td>
+    <td>${r.external?'<span class="badge" style="background:#fff1d6;color:#a15c00">外部</span>':`<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span>`}</td>
+    <td>${r.external?'—':num(effRent(r))}</td><td>${esc(r.billto||'')}</td>
     <td><button class="btn sec sm" onclick="editResident('${r.id}')">編集</button>
         <button class="btn sec sm" onclick="quickCreate('${r.id}')">書類作成</button>
         <button class="btn danger sm" onclick="delResident('${r.id}')">削除</button></td></tr>`).join('');
@@ -700,6 +701,7 @@ function editResident(id){
   $('rm_kounetsu').value=r.kounetsu||'イケイケ立替';$('rm_atesaki').value=r.atesaki||'請求先';$('rm_family').value=r.family||'';
   $('rm_rent').value=r.rent!=null?r.rent:'';$('rm_kyo').value=r.kyo!=null?r.kyo:'';$('rm_sup').value=r.sup!=null?r.sup:'';
   $('rm_note').value=r.note||'';
+  if($('rm_external'))$('rm_external').checked=!!r.external;
   openModal('residentModal');
 }
 function saveResident(){
@@ -708,6 +710,7 @@ function saveResident(){
     movein:$('rm_movein').value,billto:$('rm_billto').value.trim(),tanto:$('rm_tanto').value.trim(),
     kounetsu:$('rm_kounetsu').value,atesaki:$('rm_atesaki').value,family:$('rm_family').value.trim(),
     rent:$('rm_rent').value===''?null:+$('rm_rent').value,kyo:$('rm_kyo').value===''?null:+$('rm_kyo').value,sup:$('rm_sup').value===''?null:+$('rm_sup').value,
+    external:($('rm_external')?$('rm_external').checked:false),
     note:$('rm_note').value.trim()};
   if(editingResidentId){const i=state.residents.findIndex(x=>x.id===editingResidentId);state.residents[i]=obj;}
   else state.residents.push(obj);
@@ -735,6 +738,10 @@ const DOC_TYPES_SEIHO=[
   {key:'ryoshu_engo',label:'領収書（援護課あて・家賃分）',suffix:'Y',docTitle:'領 収 書',desc:'援護課からの家賃（住宅使用料）入金に対する領収書'},
   {key:'ryoshu',label:'領収書（ご本人あて）',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
 ];
+const DOC_TYPES_GAIBU=[
+  {key:'gaibu_meal',label:'食事代請求書（外部・食事のみ）',suffix:'F',docTitle:'請 求 書',desc:'デイご利用の食事代（喫食実績CSV）のみを請求。家賃なし'},
+  {key:'ryoshu',label:'領収書',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
+];
 function renderCreate(){
   const sel=$('createResident');const cur=sel.value;
   sel.innerHTML='<option value="">— 入居者を選択 —</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}（${r.kubun}${r.room?'・'+esc(r.room):''}）</option>`).join('');
@@ -748,8 +755,10 @@ function onCreateResidentChange(){
   const info=$('createResidentInfo');const grid=$('docTypeGrid');
   if(!r){info.textContent='';grid.innerHTML='<div class="muted">先に入居者を選択してください。</div>';return;}
   if(r.movein&&!$('createMoveIn').value)$('createMoveIn').value=r.movein;
-  info.innerHTML=`<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span> 居室:${esc(r.room||'—')}／請求先:${esc(r.billto||'—')}／家賃:${num(effRent(r))}円`;
-  const types=r.kubun==='生保'?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL;
+  info.innerHTML=r.external
+    ? `<span class="badge" style="background:#fff1d6;color:#a15c00">外部利用者</span> 請求先:${esc(r.billto||'—')}／食事代のみ請求（家賃なし）`
+    : `<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span> 居室:${esc(r.room||'—')}／請求先:${esc(r.billto||'—')}／家賃:${num(effRent(r))}円`;
+  const types=r.external?DOC_TYPES_GAIBU:(r.kubun==='生保'?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL);
   grid.innerHTML=types.map(t=>`<button onclick="openDoc('${r.id}','${t.key}')"><b>${esc(t.label)}</b><span class="muted">${esc(t.desc)}</span></button>`).join('');
 }
 
@@ -971,8 +980,8 @@ function buildDoc(r,typeKey){
   const issue=parseD($('createIssue').value||todayStr());
   const isSeiho=r.kubun==='生保';
   const rent=effRent(r),kyo=effKyo(r),sup=effSup(r);
-  const types=isSeiho?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL;
-  const t=types.find(x=>x.key===typeKey);
+  const types=r.external?DOC_TYPES_GAIBU:(isSeiho?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL);
+  const t=types.find(x=>x.key===typeKey)||DOC_TYPES_NORMAL.find(x=>x.key===typeKey)||DOC_TYPES_GAIBU.find(x=>x.key===typeKey);
   let items=[],notes=[],dueLabel='お支払期限',due=null,showBank=true,lead='',subGroups=null,to='',keisho='御中',tanto='';
   const daysMove=move?moveInDays(move):0;
   // 宛先の既定
@@ -1061,6 +1070,15 @@ function buildDoc(r,typeKey){
       '食費・生活支援サービス費は課税。',
       (mImpH?'食費は '+monthStr+' の喫食実績（食事CSV取込）に基づく実額です。':'食費は朝食（食事＋配膳）・昼・夕・おやつの単価×回数です。'),
       '光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。個人契約の方は請求対象外。'];
+  }else if(typeKey==='gaibu_meal'){ // 外部利用者・食事のみ
+    lead='下記のとおりご請求申し上げます。【請求区分：食事代（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
+    const mealDays=daysInMonth(monthD||issue);
+    const mImpG=getMealImport(r.name,monthStr);
+    items=mImpG?importMealLines(mImpG):mealLines(r,mealDays);
+    dueLabel='お支払期限';due=endOfMonth(monthD||issue);
+    notes=['本請求はデイサービスご利用時の食事代です（入居に伴う家賃・共益費等はありません）。',
+      '食費は非課税。',
+      (mImpG?'食費は '+monthStr+' の喫食実績（食事CSV取込）に基づく実額です。':'食費は各食の単価×回数で計算しています。')];
   }else if(typeKey==='ryoshu'||typeKey==='ryoshu_engo'){ // 領収書
     lead='';showBank=false;dueLabel='';
     items=[];
@@ -1069,7 +1087,7 @@ function buildDoc(r,typeKey){
   const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
   return{
     id:uid(),typeKey,typeLabel:t.label,docTitle:t.docTitle,suffix:t.suffix,
-    residentId:r.id,residentName:r.name,room:r.room,kubun:r.kubun,
+    residentId:r.id,residentName:r.name,room:r.room,kubun:r.kubun,external:!!r.external,
     to,keisho,tanto,issue:issue?issue.toISOString().slice(0,10):todayStr(),
     move:move?move.toISOString().slice(0,10):'',month:monthStr,
     number:'',items,total,notes,dueLabel,due:due?due.toISOString().slice(0,10):'',showBank,lead,
@@ -1194,7 +1212,7 @@ function docHTML(d){
       <div class="to">
         ${esc(d.to)}　${esc(d.keisho)}
         ${d.tanto?`<div class="sub">ご担当：${esc(d.tanto)} 様</div>`:''}
-        ${d.residentName?`<div class="sub">対象者：${esc(d.residentName)} 様</div><div class="sub">（${esc(homeShort(c.housing))} ご入居者${d.room?`・居室 ${esc(d.room)}`:''}）</div>`:''}
+        ${d.residentName?(d.external?`<div class="sub">対象者：${esc(d.residentName)} 様（デイサービスご利用者）</div>`:`<div class="sub">対象者：${esc(d.residentName)} 様</div><div class="sub">（${esc(homeShort(c.housing))} ご入居者${d.room?`・居室 ${esc(d.room)}`:''}）</div>`):''}
       </div>
       <div class="meta">
         <table>
