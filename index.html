@@ -519,7 +519,13 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <div><label>区分</label><select id="rm_kubun"><option value="通常">通常</option><option value="生保">生保（生活保護）</option></select></div>
       <div><label>入居日</label><input type="date" id="rm_movein"></div>
     </div>
-    <label class="flexwrap" style="background:#fff7e6;border:1px solid #ffe58f;border-radius:8px;padding:8px 10px;margin-top:8px"><input type="checkbox" id="rm_external" style="width:auto"> <b>外部利用者（デイのみ・入居なし）</b>　※家賃・共益費・生活支援は請求せず、食事代のみ請求します</label>
+    <label style="margin-top:8px">種別</label>
+    <select id="rm_mode">
+      <option value="nyukyo">入居者（アロハハウス入居・家賃あり）</option>
+      <option value="gaibu">外部利用者（デイのみ・入居なし／食事代のみ）</option>
+      <option value="otameshi">お試し入居（短期・お試し請求書＋スケジュール表）</option>
+    </select>
+    <div class="muted" style="margin-top:4px">※「入居者」は通常/生保の区分と家賃で請求。「外部」は食事代のみ。「お試し」は住居費日割＋食事＋デイ＋訪問のお試し請求書と予定表が作れます。</div>
     <div class="grid2">
       <div><label>請求先（宛先）</label><input id="rm_billto" placeholder="例：ご家族名／町田市 生活援護課"></div>
       <div><label>ご担当者・ご家族</label><input id="rm_tanto"></div>
@@ -736,8 +742,8 @@ function renderResidents(){
   const tb=$('residentTable').querySelector('tbody');
   tb.innerHTML=state.residents.map(r=>`<tr>
     <td>${esc(r.name)}</td><td>${esc(r.room||'')}</td>
-    <td>${r.external?'<span class="badge" style="background:#fff1d6;color:#a15c00">外部</span>':`<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span>`}</td>
-    <td>${r.external?'—':num(effRent(r))}</td><td>${esc(r.billto||'')}</td>
+    <td>${r.otameshi?'<span class="badge" style="background:#fde8ef;color:#b3305e">お試し</span>':(r.external?'<span class="badge" style="background:#fff1d6;color:#a15c00">外部</span>':`<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span>`)}</td>
+    <td>${(r.external||r.otameshi)?'—':num(effRent(r))}</td><td>${esc(r.billto||'')}</td>
     <td><button class="btn sec sm" onclick="editResident('${r.id}')">編集</button>
         <button class="btn sec sm" onclick="quickCreate('${r.id}')">書類作成</button>
         <button class="btn danger sm" onclick="delResident('${r.id}')">削除</button></td></tr>`).join('');
@@ -757,7 +763,7 @@ function editResident(id){
   $('rm_kounetsu').value=r.kounetsu||'イケイケ立替';$('rm_atesaki').value=r.atesaki||'請求先';$('rm_family').value=r.family||'';
   $('rm_rent').value=r.rent!=null?r.rent:'';$('rm_kyo').value=r.kyo!=null?r.kyo:'';$('rm_sup').value=r.sup!=null?r.sup:'';
   $('rm_note').value=r.note||'';
-  if($('rm_external'))$('rm_external').checked=!!r.external;
+  if($('rm_mode'))$('rm_mode').value=r.otameshi?'otameshi':(r.external?'gaibu':'nyukyo');
   openModal('residentModal');
 }
 function saveResident(){
@@ -766,7 +772,8 @@ function saveResident(){
     movein:$('rm_movein').value,billto:$('rm_billto').value.trim(),tanto:$('rm_tanto').value.trim(),
     kounetsu:$('rm_kounetsu').value,atesaki:$('rm_atesaki').value,family:$('rm_family').value.trim(),
     rent:$('rm_rent').value===''?null:+$('rm_rent').value,kyo:$('rm_kyo').value===''?null:+$('rm_kyo').value,sup:$('rm_sup').value===''?null:+$('rm_sup').value,
-    external:($('rm_external')?$('rm_external').checked:false),
+    external:($('rm_mode')?$('rm_mode').value==='gaibu':false),
+    otameshi:($('rm_mode')?$('rm_mode').value==='otameshi':false),
     note:$('rm_note').value.trim()};
   if(editingResidentId){const i=state.residents.findIndex(x=>x.id===editingResidentId);state.residents[i]=obj;}
   else state.residents.push(obj);
@@ -784,6 +791,9 @@ const DOC_TYPES_NORMAL=[
   {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
   {key:'seikyu_yachin',label:'請求書（家賃時・月次）',suffix:'R',docTitle:'請 求 書',desc:'家賃・共益費・食費・生活支援の日割／月次'},
   {key:'karioosae',label:'仮押さえ請求書',suffix:'K',docTitle:'請 求 書',desc:'家賃1ヶ月分の前金（お部屋の確保）'},
+  {key:'ryoshu',label:'領収書',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
+];
+const DOC_TYPES_OTAMESHI=[
   {key:'otameshi',label:'お試し入居 請求書（短期）',suffix:'T',docTitle:'請 求 書',desc:'例：2泊3日。住居費の日割＋食事＋デイ＋訪問介護（自費）。数量は編集で自動再計算'},
   {key:'ryoshu',label:'領収書',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
 ];
@@ -793,7 +803,6 @@ const DOC_TYPES_SEIHO=[
   {key:'honnin',label:'ご本人あて請求書（家賃以外）',suffix:'H',docTitle:'請 求 書',desc:'食費・おやつ・生活支援・光熱費など、家賃以外の本当の請求書'},
   {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
   {key:'ryoshu_engo',label:'領収書（援護課あて・家賃分）',suffix:'Y',docTitle:'領 収 書',desc:'援護課からの家賃（住宅使用料）入金に対する領収書'},
-  {key:'otameshi',label:'お試し入居 請求書（短期）',suffix:'T',docTitle:'請 求 書',desc:'例：2泊3日。住居費の日割＋食事＋デイ＋訪問介護（自費）。数量は編集で自動再計算'},
   {key:'ryoshu',label:'領収書（ご本人あて）',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
 ];
 const DOC_TYPES_GAIBU=[
@@ -813,11 +822,14 @@ function onCreateResidentChange(){
   const info=$('createResidentInfo');const grid=$('docTypeGrid');
   if(!r){info.textContent='';grid.innerHTML='<div class="muted">先に入居者を選択してください。</div>';return;}
   if(r.movein&&!$('createMoveIn').value)$('createMoveIn').value=r.movein;
-  info.innerHTML=r.external
-    ? `<span class="badge" style="background:#fff1d6;color:#a15c00">外部利用者</span> 請求先:${esc(r.billto||'—')}／食事代のみ請求（家賃なし）`
-    : `<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span> 居室:${esc(r.room||'—')}／請求先:${esc(r.billto||'—')}／家賃:${num(effRent(r))}円`;
-  const types=r.external?DOC_TYPES_GAIBU:(r.kubun==='生保'?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL);
+  info.innerHTML=r.otameshi
+    ? `<span class="badge" style="background:#fde8ef;color:#b3305e">お試し入居</span> 請求先:${esc(r.billto||'—')}／お試し請求書＋予定表が作れます`
+    : (r.external
+      ? `<span class="badge" style="background:#fff1d6;color:#a15c00">外部利用者</span> 請求先:${esc(r.billto||'—')}／食事代のみ請求（家賃なし）`
+      : `<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span> 居室:${esc(r.room||'—')}／請求先:${esc(r.billto||'—')}／家賃:${num(effRent(r))}円`);
+  const types=r.otameshi?DOC_TYPES_OTAMESHI:(r.external?DOC_TYPES_GAIBU:(r.kubun==='生保'?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL));
   grid.innerHTML=types.map(t=>`<button onclick="openDoc('${r.id}','${t.key}')"><b>${esc(t.label)}</b><span class="muted">${esc(t.desc)}</span></button>`).join('');
+  if(r.otameshi){grid.innerHTML+=`<button onclick="go('schedule');setTimeout(()=>{document.getElementById('sc_resident').value='${r.id}';scheduleLoadResident();},50)"><b>🗓 予定表（スケジュール表）を作る</b><span class="muted">この方のご利用スケジュール表を作成します</span></button>`;}
 }
 
 /* ============================================================
@@ -995,7 +1007,7 @@ function batchCreateForMonth(ym){
   const md=state.mealData&&state.mealData[ym];
   if(!md){alert('その月の食事データがありません。');return;}
   const names=new Set((md.people||[]).map(p=>nkey(p.name)));
-  const targets=state.residents.filter(r=>names.has(nkey(r.name)));
+  const targets=state.residents.filter(r=>names.has(nkey(r.name))&&!r.otameshi); // お試しは一括対象外（個別作成）
   if(!targets.length){alert('この月の食事データに一致する登録入居者がいません。先に入居者を同じ氏名で登録してください。');return;}
   if(!confirm(ym+' の食事データに一致する '+targets.length+' 名の請求書をまとめて作成します。よろしいですか？\n（区分に応じて：外部＝食事のみ／生保＝ご本人あて／通常＝家賃時。作成済みの同月・同種類はスキップ）'))return;
   // 書類作成タブの隠しフィールドを一時設定（buildDocが参照）
@@ -1069,8 +1081,8 @@ function buildDoc(r,typeKey){
   const issue=parseD($('createIssue').value||todayStr());
   const isSeiho=r.kubun==='生保';
   const rent=effRent(r),kyo=effKyo(r),sup=effSup(r);const m=state.settings.meals;
-  const types=r.external?DOC_TYPES_GAIBU:(isSeiho?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL);
-  const t=types.find(x=>x.key===typeKey)||DOC_TYPES_NORMAL.find(x=>x.key===typeKey)||DOC_TYPES_GAIBU.find(x=>x.key===typeKey);
+  const types=r.otameshi?DOC_TYPES_OTAMESHI:(r.external?DOC_TYPES_GAIBU:(isSeiho?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL));
+  const t=types.find(x=>x.key===typeKey)||DOC_TYPES_NORMAL.find(x=>x.key===typeKey)||DOC_TYPES_SEIHO.find(x=>x.key===typeKey)||DOC_TYPES_GAIBU.find(x=>x.key===typeKey)||DOC_TYPES_OTAMESHI.find(x=>x.key===typeKey);
   let items=[],notes=[],dueLabel='お支払期限',due=null,showBank=true,lead='',subGroups=null,to='',keisho='御中',tanto='';
   const daysMove=move?moveInDays(move):0;
   // 宛先の既定
@@ -1201,7 +1213,7 @@ function buildDoc(r,typeKey){
   const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
   return{
     id:uid(),typeKey,typeLabel:t.label,docTitle:t.docTitle,suffix:t.suffix,
-    residentId:r.id,residentName:r.name,room:r.room,kubun:r.kubun,external:!!r.external,
+    residentId:r.id,residentName:r.name,room:r.room,kubun:r.kubun,external:!!r.external,otameshi:!!r.otameshi,
     to,keisho,tanto,issue:issue?issue.toISOString().slice(0,10):todayStr(),
     move:move?move.toISOString().slice(0,10):'',month:monthStr,
     number:'',items,total,notes,dueLabel,due:due?due.toISOString().slice(0,10):'',showBank,lead,
@@ -1326,7 +1338,7 @@ function docHTML(d){
       <div class="to">
         ${esc(d.to)}　${esc(d.keisho)}
         ${d.tanto?`<div class="sub">ご担当：${esc(d.tanto)} 様</div>`:''}
-        ${d.residentName?(d.external?`<div class="sub">対象者：${esc(d.residentName)} 様（デイサービスご利用者）</div>`:`<div class="sub">対象者：${esc(d.residentName)} 様</div><div class="sub">（${esc(homeShort(c.housing))} ご入居者${d.room?`・居室 ${esc(d.room)}`:''}）</div>`):''}
+        ${d.residentName?(d.otameshi?`<div class="sub">対象者：${esc(d.residentName)} 様（お試し入居・短期利用）</div>`:(d.external?`<div class="sub">対象者：${esc(d.residentName)} 様（デイサービスご利用者）</div>`:`<div class="sub">対象者：${esc(d.residentName)} 様</div><div class="sub">（${esc(homeShort(c.housing))} ご入居者${d.room?`・居室 ${esc(d.room)}`:''}）</div>`)):''}
       </div>
       <div class="meta">
         <table>
