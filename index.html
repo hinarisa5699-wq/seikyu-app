@@ -1038,6 +1038,10 @@ function housingHTML(housing){
   }
   return `<div class="big">${esc(h)}</div>`;
 }
+function homeShort(housing){
+  const parts=String(housing||'').trim().split(/[ 　]+/).filter(Boolean);
+  return parts.length?parts[parts.length-1]:'当ホーム';
+}
 function docHTML(d){
   const st=state.settings;const c=st.company;const b=st.bank;
   const issueD=parseD(d.issue),dueD=parseD(d.due);
@@ -1048,7 +1052,7 @@ function docHTML(d){
       <div class="to">
         ${esc(d.to)}　${esc(d.keisho)}
         ${d.tanto?`<div class="sub">ご担当：${esc(d.tanto)} 様</div>`:''}
-        ${d.residentName?`<div class="sub">対象者：${esc(d.residentName)} 様${d.room?`（当ホーム ご入居者・居室 ${esc(d.room)}）`:'（当ホーム ご入居者）'}</div>`:''}
+        ${d.residentName?`<div class="sub">対象者：${esc(d.residentName)} 様</div><div class="sub">（${esc(homeShort(c.housing))} ご入居者${d.room?`・居室 ${esc(d.room)}`:''}）</div>`:''}
       </div>
       <div class="meta">
         <table>
