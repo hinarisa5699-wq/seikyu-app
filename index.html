@@ -131,6 +131,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <button data-tab="create">書類作成</button>
   <button data-tab="mealcsv">食事CSV</button>
   <button data-tab="history">履歴</button>
+  <button data-tab="payments">入金確認</button>
   <button data-tab="settings">設定</button>
 </nav>
 <main>
@@ -221,7 +222,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <h3>取込プレビュー（<span id="mc_ymLabel"></span>）</h3>
       <p class="muted" id="mc_summary"></p>
       <table class="data" id="mc_table">
-        <thead><tr><th>区分</th><th>氏名</th><th>部屋</th><th>朝食</th><th>昼食</th><th>夕食</th><th>おやつ</th><th>配膳(回)</th><th>合計(円)</th><th>入居者照合</th></tr></thead>
+        <thead><tr><th>区分</th><th>氏名</th><th>部屋</th><th>朝食</th><th>昼食</th><th>夕食</th><th>弁当</th><th>おやつ</th><th>飲み物</th><th>配膳(回)</th><th>合計(円)</th><th>入居者照合</th></tr></thead>
         <tbody></tbody>
       </table>
       <div class="row-actions">
@@ -239,8 +240,11 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <section id="tab-history" style="display:none">
     <div class="card">
       <h2>作成履歴</h2>
-      <p class="muted">過去に作成した書類の再表示・再印刷・複製・領収書発行ができます。</p>
-      <input id="historySearch" placeholder="氏名・番号で検索" oninput="renderHistory()" style="max-width:320px">
+      <p class="muted">過去に作成した書類の再表示・再印刷・複製・領収書発行ができます。月ごとに絞り込めます。</p>
+      <div class="flexwrap">
+        <select id="historyMonth" onchange="renderHistory()" style="max-width:200px"><option value="">すべての月</option></select>
+        <input id="historySearch" placeholder="氏名・番号で検索" oninput="renderHistory()" style="max-width:320px">
+      </div>
     </div>
     <div class="card">
       <table class="data" id="historyTable">
@@ -248,6 +252,30 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <tbody></tbody>
       </table>
       <div id="historyEmpty" class="empty">まだ書類がありません。</div>
+    </div>
+  </section>
+
+  <!-- PAYMENTS -->
+  <section id="tab-payments" style="display:none">
+    <div class="card">
+      <h2>💰 入金確認</h2>
+      <p class="muted">請求書ごとに<b>入金日</b>を記録できます。未入金・入金済の一覧と合計が確認できます（見積書・領収書は対象外）。</p>
+      <div class="flexwrap">
+        <select id="payMonth" onchange="renderPayments()" style="max-width:200px"><option value="">すべての月</option></select>
+        <select id="payFilter" onchange="renderPayments()" style="max-width:200px">
+          <option value="all">すべて表示</option>
+          <option value="unpaid">未入金のみ</option>
+          <option value="paid">入金済のみ</option>
+        </select>
+      </div>
+    </div>
+    <div class="card">
+      <div id="paySummary" class="muted" style="margin-bottom:10px"></div>
+      <table class="data" id="payTable">
+        <thead><tr><th>発行日</th><th>種類</th><th>番号</th><th>対象者</th><th>請求額</th><th>状況</th><th>入金日</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="payEmpty" class="empty">対象の請求書がありません。</div>
     </div>
   </section>
 
@@ -545,12 +573,13 @@ function disconnectGithub(){github={owner:'',repo:'',branch:'main',path:'data.js
    ============================================================ */
 function go(tab){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  ['home','residents','create','mealcsv','history','settings'].forEach(t=>$('tab-'+t).style.display=(t===tab?'':'none'));
+  ['home','residents','create','mealcsv','history','payments','settings'].forEach(t=>$('tab-'+t).style.display=(t===tab?'':'none'));
   if(tab==='home')renderHome();
   if(tab==='residents')renderResidents();
   if(tab==='create')renderCreate();
   if(tab==='mealcsv')renderMealCsv();
   if(tab==='history')renderHistory();
+  if(tab==='payments')renderPayments();
   if(tab==='settings')fillSettingsForm();
   window.scrollTo(0,0);
 }
@@ -687,9 +716,10 @@ function aggregateMeals(rows){
   const hd=rows[h].map(x=>String(x).trim());
   const col=name=>hd.findIndex(x=>x===name);
   const ci={date:col('日付'),kubun:col('区分'),name:col('氏名'),room:col('部屋番号'),
-    asa:col('朝食'),hiru:col('昼食'),yoru:col('夕食'),oya:col('おやつ'),haiC:col('配膳下膳(回)'),
-    asaA:col('朝食代'),hiruA:col('昼食代'),yoruA:col('夕食代'),oyaA:col('おやつ代'),haiA:col('配膳下膳代'),total:col('合計(円)')};
+    asa:col('朝食'),hiru:col('昼食'),yoru:col('夕食'),bento:col('弁当'),oya:col('おやつ'),drink:col('飲み物'),haiC:col('配膳下膳(回)'),
+    asaA:col('朝食代'),hiruA:col('昼食代'),yoruA:col('夕食代'),bentoA:col('弁当代'),oyaA:col('おやつ代'),drinkA:col('飲み物代'),haiA:col('配膳下膳代'),total:col('合計(円)')};
   if(ci.name<0)return{error:'「氏名」列が見つかりませんでした。'};
+  const dayOf=s=>{const m=String(s).match(/\d{4}[\/\-](\d{1,2})[\/\-](\d{1,2})/);return m?String(parseInt(m[2],10)):'';};
   const map={};let firstDate='';
   for(let r=h+1;r<rows.length;r++){
     const rw=rows[r];const dcell=(ci.date>=0?rw[ci.date]:'')||'';
@@ -701,18 +731,23 @@ function aggregateMeals(rows){
     const nm=(rw[ci.name]||'').trim();if(!nm)continue;
     const k=nkey(nm);
     if(!map[k])map[k]={name:nm,kubun:(ci.kubun>=0?(rw[ci.kubun]||'').trim():''),room:(ci.room>=0?(rw[ci.room]||'').trim():''),
-      days:0,asaCount:0,hiruCount:0,yoruCount:0,oyaCount:0,haizenCount:0,
-      asaAmt:0,hiruAmt:0,yoruAmt:0,oyaAmt:0,haizenAmt:0,total:0};
-    const p=map[k];p.days++;
-    if(ci.asa>=0&&isMark(rw[ci.asa]))p.asaCount++;
-    if(ci.hiru>=0&&isMark(rw[ci.hiru]))p.hiruCount++;
-    if(ci.yoru>=0&&isMark(rw[ci.yoru]))p.yoruCount++;
-    if(ci.oya>=0&&isMark(rw[ci.oya]))p.oyaCount++;
-    if(ci.haiC>=0)p.haizenCount+=toInt(rw[ci.haiC]);
+      days:0,asaCount:0,hiruCount:0,yoruCount:0,bentoCount:0,oyaCount:0,drinkCount:0,haizenCount:0,
+      asaAmt:0,hiruAmt:0,yoruAmt:0,bentoAmt:0,oyaAmt:0,drinkAmt:0,haizenAmt:0,total:0,
+      asaDays:[],hiruDays:[],yoruDays:[],bentoDays:[],oyaDays:[],drinkDays:[],haizenDays:[]};
+    const p=map[k];p.days++;const dnum=dayOf(dcell);
+    if(ci.asa>=0&&isMark(rw[ci.asa])){p.asaCount++;if(dnum)p.asaDays.push(dnum);}
+    if(ci.hiru>=0&&isMark(rw[ci.hiru])){p.hiruCount++;if(dnum)p.hiruDays.push(dnum);}
+    if(ci.yoru>=0&&isMark(rw[ci.yoru])){p.yoruCount++;if(dnum)p.yoruDays.push(dnum);}
+    if(ci.bento>=0&&isMark(rw[ci.bento])){p.bentoCount++;if(dnum)p.bentoDays.push(dnum);}
+    if(ci.oya>=0&&isMark(rw[ci.oya])){p.oyaCount++;if(dnum)p.oyaDays.push(dnum);}
+    if(ci.drink>=0&&isMark(rw[ci.drink])){p.drinkCount++;if(dnum)p.drinkDays.push(dnum);}
+    if(ci.haiC>=0){const hc=toInt(rw[ci.haiC]);if(hc>0){p.haizenCount+=hc;if(dnum)p.haizenDays.push(dnum);}}
     if(ci.asaA>=0)p.asaAmt+=toInt(rw[ci.asaA]);
     if(ci.hiruA>=0)p.hiruAmt+=toInt(rw[ci.hiruA]);
     if(ci.yoruA>=0)p.yoruAmt+=toInt(rw[ci.yoruA]);
+    if(ci.bentoA>=0)p.bentoAmt+=toInt(rw[ci.bentoA]);
     if(ci.oyaA>=0)p.oyaAmt+=toInt(rw[ci.oyaA]);
+    if(ci.drinkA>=0)p.drinkAmt+=toInt(rw[ci.drinkA]);
     if(ci.haiA>=0)p.haizenAmt+=toInt(rw[ci.haiA]);
     if(ci.total>=0)p.total+=toInt(rw[ci.total]);
   }
@@ -783,7 +818,8 @@ function renderMcPreview(){
     return `<tr style="${isRes?'background:#f3f9ff':''}">
       <td>${esc(x.kubun||'—')}</td><td>${esc(x.name)}</td><td>${esc(x.room||'')}</td>
       <td>${x.asaCount}食/${num(x.asaAmt)}</td><td>${x.hiruCount}食/${num(x.hiruAmt)}</td>
-      <td>${x.yoruCount}食/${num(x.yoruAmt)}</td><td>${x.oyaCount}食/${num(x.oyaAmt)}</td>
+      <td>${x.yoruCount}食/${num(x.yoruAmt)}</td><td>${(x.bentoCount||0)}食/${num(x.bentoAmt||0)}</td>
+      <td>${x.oyaCount}食/${num(x.oyaAmt)}</td><td>${(x.drinkCount||0)}回/${num(x.drinkAmt||0)}</td>
       <td>${x.haizenCount}回/${num(x.haizenAmt)}</td><td><b>${num(x.total)}</b></td><td>${badge}</td></tr>`;
   }).join('');
 }
@@ -816,14 +852,21 @@ function getMealImport(name,ym){
   const md=state.mealData&&state.mealData[ym];if(!md)return null;
   const k=nkey(name);return (md.people||[]).find(x=>nkey(x.name)===k)||null;
 }
+function fmtDays(arr){
+  if(!arr||!arr.length)return'';
+  const nums=arr.map(x=>parseInt(x,10)).filter(n=>!isNaN(n)).sort((a,b)=>a-b);
+  return nums.map(n=>n+'日').join('・');
+}
 function importMealLines(p,label){
   const rows=[];const lab=label?`（${label}）`:'';
-  const add=(nm,cnt,amt,kij)=>{if((+cnt)>0||(+amt)>0){const unit=cnt>0?Math.round(amt/cnt):(nm==='配膳下膳'?150:amt);rows.push({name:nm+lab,tanka:unit,qty:cnt,kijun:kij,amount:+amt||0,tekiyo:'喫食実績（CSV取込・課税）',inc:true});}};
-  add('朝食',p.asaCount,p.asaAmt,'食');
-  add('昼食',p.hiruCount,p.hiruAmt,'食');
-  add('夕食',p.yoruCount,p.yoruAmt,'食');
-  add('おやつ',p.oyaCount,p.oyaAmt,'食');
-  add('配膳下膳',p.haizenCount,p.haizenAmt,'回');
+  const add=(nm,cnt,amt,kij,days)=>{if((+cnt)>0||(+amt)>0){const unit=cnt>0?Math.round(amt/cnt):(nm==='配膳下膳'?150:amt);const dt=fmtDays(days);rows.push({name:nm+lab,tanka:unit,qty:cnt,kijun:kij,amount:+amt||0,tekiyo:(dt?dt:'喫食実績')+'（CSV）',inc:true});}};
+  add('朝食',p.asaCount,p.asaAmt,'食',p.asaDays);
+  add('昼食',p.hiruCount,p.hiruAmt,'食',p.hiruDays);
+  add('夕食',p.yoruCount,p.yoruAmt,'食',p.yoruDays);
+  add('弁当',p.bentoCount,p.bentoAmt,'食',p.bentoDays);
+  add('おやつ',p.oyaCount,p.oyaAmt,'食',p.oyaDays);
+  add('飲み物',p.drinkCount,p.drinkAmt,'回',p.drinkDays);
+  add('配膳下膳',p.haizenCount,p.haizenAmt,'回',p.haizenDays);
   return rows;
 }
 
@@ -1134,9 +1177,18 @@ function renderDocPreview(){collectDocForm();$('dm_preview').innerHTML=docHTML(c
 /* ============================================================
    履歴
    ============================================================ */
+function monthsOf(docs){return [...new Set(docs.map(d=>(d.issue||'').slice(0,7)))].filter(Boolean).sort().reverse();}
+function fillMonthSelect(selId,docs){
+  const sel=$(selId);if(!sel)return;const cur=sel.value;
+  sel.innerHTML='<option value="">すべての月</option>'+monthsOf(docs).map(m=>`<option value="${m}">${m.slice(0,4)}年${m.slice(5,7)}月</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+}
 function renderHistory(){
   const q=($('historySearch').value||'').trim();
-  let docs=[...state.documents].sort((a,b)=>b.issue.localeCompare(a.issue)||b.number.localeCompare(a.number));
+  fillMonthSelect('historyMonth',state.documents);
+  const mSel=$('historyMonth').value;
+  let docs=[...state.documents].sort((a,b)=>b.issue.localeCompare(a.issue)||(b.number||'').localeCompare(a.number||''));
+  if(mSel)docs=docs.filter(d=>(d.issue||'').slice(0,7)===mSel);
   if(q)docs=docs.filter(d=>(d.residentName+d.number+d.typeLabel).includes(q));
   const tb=$('historyTable').querySelector('tbody');
   tb.innerHTML=docs.map(d=>`<tr>
@@ -1149,6 +1201,34 @@ function renderHistory(){
   $('historyEmpty').style.display=docs.length?'none':'';
   $('historyTable').style.display=docs.length?'':'none';
 }
+/* ============================================================
+   入金確認
+   ============================================================ */
+function isSeikyuDoc(d){return d.typeKey!=='ryoshu'&&d.typeKey!=='ryoshu_engo'&&d.typeKey!=='mitsumori'&&d.typeKey!=='mitsumori_s';}
+function renderPayments(){
+  const base=state.documents.filter(isSeikyuDoc);
+  fillMonthSelect('payMonth',base);
+  const mSel=$('payMonth').value;const filt=$('payFilter').value;
+  let docs=[...base].sort((a,b)=>b.issue.localeCompare(a.issue)||(b.number||'').localeCompare(a.number||''));
+  if(mSel)docs=docs.filter(d=>(d.issue||'').slice(0,7)===mSel);
+  const unpaidTotal=docs.filter(d=>!d.paid).reduce((s,d)=>s+(+d.total||0),0);
+  const paidTotal=docs.filter(d=>d.paid).reduce((s,d)=>s+(+d.total||0),0);
+  if(filt==='unpaid')docs=docs.filter(d=>!d.paid);
+  if(filt==='paid')docs=docs.filter(d=>d.paid);
+  $('paySummary').innerHTML=`対象 ${docs.length} 件　／　未入金 <b style="color:var(--warn)">${yen(unpaidTotal)}</b>　入金済 <b style="color:var(--ok)">${yen(paidTotal)}</b>`;
+  const tb=$('payTable').querySelector('tbody');
+  tb.innerHTML=docs.map(d=>`<tr>
+    <td>${esc(d.issue)}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
+    <td>${esc(d.residentName||d.to||'')}</td><td>${yen(d.total)}</td>
+    <td>${d.paid?'<span class="badge normal">入金済</span>':'<span class="badge seiho">未入金</span>'}</td>
+    <td><input type="date" value="${esc(d.paidDate||'')}" onchange="setPaidDate('${d.id}',this.value)" style="max-width:150px"></td>
+    <td>${d.paid?`<button class="btn sec sm" onclick="togglePaid('${d.id}',false)">未入金に戻す</button>`:`<button class="btn sm" onclick="togglePaid('${d.id}',true)">入金済にする</button>`}</td>
+  </tr>`).join('');
+  $('payEmpty').style.display=docs.length?'none':'';
+  $('payTable').style.display=docs.length?'':'none';
+}
+function setPaidDate(id,v){const d=state.documents.find(x=>x.id===id);if(!d)return;d.paidDate=v;if(v)d.paid=true;persist();renderPayments();}
+function togglePaid(id,val){const d=state.documents.find(x=>x.id===id);if(!d)return;d.paid=val;if(val&&!d.paidDate)d.paidDate=todayStr();if(!val)d.paidDate='';persist();renderPayments();}
 function viewDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;$('view_preview').innerHTML=docHTML(d);openModal('viewModal');window._printDoc=d;}
 function reopenDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;currentDoc=JSON.parse(JSON.stringify(d));fillDocForm();openModal('docModal');renderDocPreview();}
 function delDoc(id){if(!confirm('この書類を削除しますか？'))return;state.documents=state.documents.filter(x=>x.id!==id);persist();renderHistory();}
