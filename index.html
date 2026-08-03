@@ -1215,9 +1215,19 @@ function buildDoc(r,typeKey){
     items=[];
     notes=['上記正に領収いたしました。'];
   }
+  // 仮押さえ前金の充当（入金済み・未充当のものを次の契約請求で差し引く／二重請求防止）
+  let appliedKario=[];
+  if(typeKey==='seikyu_yachin'||typeKey==='seikyu_nyukin'){
+    const karios=state.documents.filter(d=>d.residentId===r.id&&d.typeKey==='karioosae'&&d.paid&&!d.applied);
+    karios.forEach(k=>{
+      items.push({name:'仮押さえ前金 充当',tanka:'－',qty:'－',kijun:'－',amount:-(+k.total||0),tekiyo:'お支払済みの仮押さえ前金を初回請求に充当（'+k.number+'）',inc:true});
+      appliedKario.push(k.id);
+    });
+    if(karios.length)notes.push('お支払済みの仮押さえ前金 '+yen(karios.reduce((s,k)=>s+(+k.total||0),0))+' を差し引いています（二重請求防止のため）。');
+  }
   const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
   return{
-    id:uid(),typeKey,typeLabel:t.label,docTitle:t.docTitle,suffix:t.suffix,
+    id:uid(),typeKey,typeLabel:t.label,docTitle:t.docTitle,suffix:t.suffix,appliedKario,
     residentId:r.id,residentName:r.name,room:r.room,kubun:r.kubun,external:!!r.external,otameshi:!!r.otameshi,
     to,keisho,tanto,issue:issue?issue.toISOString().slice(0,10):todayStr(),
     move:move?move.toISOString().slice(0,10):'',month:monthStr,
@@ -1313,8 +1323,14 @@ function saveAndPreview(){
   const i=state.documents.findIndex(x=>x.id===currentDoc.id);
   if(i>=0)state.documents[i]=JSON.parse(JSON.stringify(currentDoc));
   else state.documents.push(JSON.parse(JSON.stringify(currentDoc)));
+  // 充当した仮押さえを「充当済み」にする（次回以降は差し引かない＝二重防止）
+  let kmsg='';
+  if(currentDoc.appliedKario&&currentDoc.appliedKario.length){
+    currentDoc.appliedKario.forEach(kid=>{const k=state.documents.find(x=>x.id===kid);if(k){k.applied=true;k.appliedIn=currentDoc.id;}});
+    kmsg='\n（お支払済みの仮押さえ前金を充当し、充当済みにしました）';
+  }
   persist();renderDocPreview();
-  alert('保存しました。履歴からいつでも再印刷できます。');
+  alert('保存しました。履歴からいつでも再印刷できます。'+kmsg);
 }
 
 /* ============================================================
@@ -1601,7 +1617,11 @@ function renderSchedulePreview(){$('sc_preview').innerHTML=scheduleHTML();}
 function printSchedule(){$('printArea').innerHTML=scheduleHTML();window.print();}
 function viewDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;$('view_preview').innerHTML=docHTML(d);openModal('viewModal');window._printDoc=d;}
 function reopenDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;currentDoc=JSON.parse(JSON.stringify(d));fillDocForm();openModal('docModal');renderDocPreview();}
-function delDoc(id){if(!confirm('この書類を削除しますか？'))return;state.documents=state.documents.filter(x=>x.id!==id);persist();renderHistory();}
+function delDoc(id){if(!confirm('この書類を削除しますか？'))return;
+  const doc=state.documents.find(x=>x.id===id);
+  // 充当していた仮押さえがあれば「未充当」に戻す（再度充当できるように）
+  if(doc&&doc.appliedKario&&doc.appliedKario.length){doc.appliedKario.forEach(kid=>{const k=state.documents.find(x=>x.id===kid);if(k&&k.appliedIn===id){k.applied=false;k.appliedIn=null;}});}
+  state.documents=state.documents.filter(x=>x.id!==id);persist();renderHistory();}
 function makeReceipt(id){
   const src=state.documents.find(x=>x.id===id);if(!src)return;
   const r=state.residents.find(x=>x.id===src.residentId)||{};
