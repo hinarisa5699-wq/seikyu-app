@@ -275,15 +275,16 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <section id="tab-history" style="display:none">
     <div class="card">
       <h2>作成履歴</h2>
-      <p class="muted">過去に作成した書類の再表示・再印刷・複製・領収書発行ができます。月ごとに絞り込めます。</p>
+      <p class="muted">過去に作成した書類の再表示・再印刷・複製・領収書発行ができます。<b>該当月（対象月）</b>と<b>対象者</b>で絞り込めます。「発送」を押すと入金確認に移ります。</p>
       <div class="flexwrap">
-        <select id="historyMonth" onchange="renderHistory()" style="max-width:200px"><option value="">すべての月</option></select>
-        <input id="historySearch" placeholder="氏名・番号で検索" oninput="renderHistory()" style="max-width:320px">
+        <select id="historyMonth" onchange="renderHistory()" style="max-width:180px"><option value="">すべての月（該当月）</option></select>
+        <select id="historyResident" onchange="renderHistory()" style="max-width:200px"><option value="">すべての対象者</option></select>
+        <input id="historySearch" placeholder="氏名・番号で検索" oninput="renderHistory()" style="max-width:280px">
       </div>
     </div>
     <div class="card">
       <table class="data" id="historyTable">
-        <thead><tr><th>発行日</th><th>種類</th><th>番号</th><th>対象者</th><th>金額</th><th>操作</th></tr></thead>
+        <thead><tr><th>該当月</th><th>種類</th><th>番号</th><th>対象者</th><th>金額</th><th>発送</th><th>操作</th></tr></thead>
         <tbody></tbody>
       </table>
       <div id="historyEmpty" class="empty">まだ書類がありません。</div>
@@ -295,9 +296,11 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     <div class="card">
       <h2>💰 入金確認</h2>
       <p class="muted">請求書ごとに<b>入金日</b>を記録できます。未入金・入金済の一覧と合計が確認できます（見積書・領収書は対象外）。</p>
+      <p class="muted">履歴で「発送」した請求書がここに並びます。<b>該当月</b>・<b>対象者</b>で絞り込め、入金日を記録できます（見積書・領収書は対象外）。</p>
       <div class="flexwrap">
-        <select id="payMonth" onchange="renderPayments()" style="max-width:200px"><option value="">すべての月</option></select>
-        <select id="payFilter" onchange="renderPayments()" style="max-width:200px">
+        <select id="payMonth" onchange="renderPayments()" style="max-width:180px"><option value="">すべての月（該当月）</option></select>
+        <select id="payResident" onchange="renderPayments()" style="max-width:200px"><option value="">すべての対象者</option></select>
+        <select id="payFilter" onchange="renderPayments()" style="max-width:180px">
           <option value="all">すべて表示</option>
           <option value="unpaid">未入金のみ</option>
           <option value="paid">入金済のみ</option>
@@ -307,10 +310,10 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     <div class="card">
       <div id="paySummary" class="muted" style="margin-bottom:10px"></div>
       <table class="data" id="payTable">
-        <thead><tr><th>発行日</th><th>種類</th><th>番号</th><th>対象者</th><th>請求額</th><th>状況</th><th>入金日</th><th>操作</th></tr></thead>
+        <thead><tr><th>該当月</th><th>種類</th><th>番号</th><th>対象者</th><th>請求額</th><th>状況</th><th>入金日</th><th>操作</th></tr></thead>
         <tbody></tbody>
       </table>
-      <div id="payEmpty" class="empty">対象の請求書がありません。</div>
+      <div id="payEmpty" class="empty">発送済みの請求書がありません（履歴で「発送」を押すとここに表示されます）。</div>
     </div>
   </section>
 
@@ -1416,40 +1419,59 @@ function renderDocPreview(){collectDocForm();$('dm_preview').innerHTML=docHTML(c
 /* ============================================================
    履歴
    ============================================================ */
-function monthsOf(docs){return [...new Set(docs.map(d=>(d.issue||'').slice(0,7)))].filter(Boolean).sort().reverse();}
+function docYm(d){return d.month||(d.issue||'').slice(0,7);} // 該当月（対象月）
+function monthsOf(docs){return [...new Set(docs.map(docYm))].filter(Boolean).sort().reverse();}
 function fillMonthSelect(selId,docs){
   const sel=$(selId);if(!sel)return;const cur=sel.value;
-  sel.innerHTML='<option value="">すべての月</option>'+monthsOf(docs).map(m=>`<option value="${m}">${m.slice(0,4)}年${m.slice(5,7)}月</option>`).join('');
+  sel.innerHTML='<option value="">すべての月（該当月）</option>'+monthsOf(docs).map(m=>`<option value="${m}">${m.slice(0,4)}年${m.slice(5,7)}月</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur))sel.value=cur;
+}
+function fillResidentSelect(selId){
+  const sel=$(selId);if(!sel)return;const cur=sel.value;
+  sel.innerHTML='<option value="">すべての対象者</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
   if([...sel.options].some(o=>o.value===cur))sel.value=cur;
 }
 function renderHistory(){
   const q=($('historySearch').value||'').trim();
   fillMonthSelect('historyMonth',state.documents);
-  const mSel=$('historyMonth').value;
-  let docs=[...state.documents].sort((a,b)=>b.issue.localeCompare(a.issue)||(b.number||'').localeCompare(a.number||''));
-  if(mSel)docs=docs.filter(d=>(d.issue||'').slice(0,7)===mSel);
+  fillResidentSelect('historyResident');
+  const mSel=$('historyMonth').value, rSel=$('historyResident').value;
+  let docs=[...state.documents].sort((a,b)=>docYm(b).localeCompare(docYm(a))||(b.number||'').localeCompare(a.number||''));
+  if(mSel)docs=docs.filter(d=>docYm(d)===mSel);
+  if(rSel)docs=docs.filter(d=>d.residentId===rSel);
   if(q)docs=docs.filter(d=>(d.residentName+d.number+d.typeLabel).includes(q));
   const tb=$('historyTable').querySelector('tbody');
-  tb.innerHTML=docs.map(d=>`<tr>
-    <td>${esc(d.issue)}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
+  tb.innerHTML=docs.map(d=>{
+    const canSend=isSeikyuDoc(d);
+    const sendCell=!canSend?'<span class="muted">—</span>'
+      :(d.sent?`<span class="badge normal">発送済</span><div class="muted" style="font-size:11px">${esc(d.sentDate||'')}</div><button class="btn sec sm" onclick="unsendDoc('${d.id}')">取消</button>`
+              :`<button class="btn sm" onclick="sendDoc('${d.id}')">発送</button>`);
+    return `<tr>
+    <td>${esc(docYm(d))}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
     <td>${esc(d.residentName)}</td><td>${yen(d.total)}</td>
+    <td>${sendCell}</td>
     <td><button class="btn sec sm" onclick="viewDoc('${d.id}')">表示/印刷</button>
         <button class="btn sec sm" onclick="reopenDoc('${d.id}')">編集</button>
         <button class="btn sec sm" onclick="makeReceipt('${d.id}')">領収書</button>
-        <button class="btn danger sm" onclick="delDoc('${d.id}')">削除</button></td></tr>`).join('');
+        <button class="btn danger sm" onclick="delDoc('${d.id}')">削除</button></td></tr>`;
+  }).join('');
   $('historyEmpty').style.display=docs.length?'none':'';
   $('historyTable').style.display=docs.length?'':'none';
 }
+function sendDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;d.sent=true;d.sentDate=todayStr();persist();renderHistory();alert('発送済みにしました。「入金確認」タブで入金を管理できます。');}
+function unsendDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;d.sent=false;d.sentDate='';persist();renderHistory();}
 /* ============================================================
    入金確認
    ============================================================ */
 function isSeikyuDoc(d){return d.typeKey!=='ryoshu'&&d.typeKey!=='ryoshu_engo'&&d.typeKey!=='mitsumori'&&d.typeKey!=='mitsumori_s';}
 function renderPayments(){
-  const base=state.documents.filter(isSeikyuDoc);
+  const base=state.documents.filter(d=>isSeikyuDoc(d)&&d.sent); // 発送済みの請求書のみ
   fillMonthSelect('payMonth',base);
-  const mSel=$('payMonth').value;const filt=$('payFilter').value;
-  let docs=[...base].sort((a,b)=>b.issue.localeCompare(a.issue)||(b.number||'').localeCompare(a.number||''));
-  if(mSel)docs=docs.filter(d=>(d.issue||'').slice(0,7)===mSel);
+  fillResidentSelect('payResident');
+  const mSel=$('payMonth').value, rSel=$('payResident').value, filt=$('payFilter').value;
+  let docs=[...base].sort((a,b)=>docYm(b).localeCompare(docYm(a))||(b.number||'').localeCompare(a.number||''));
+  if(mSel)docs=docs.filter(d=>docYm(d)===mSel);
+  if(rSel)docs=docs.filter(d=>d.residentId===rSel);
   const unpaidTotal=docs.filter(d=>!d.paid).reduce((s,d)=>s+(+d.total||0),0);
   const paidTotal=docs.filter(d=>d.paid).reduce((s,d)=>s+(+d.total||0),0);
   if(filt==='unpaid')docs=docs.filter(d=>!d.paid);
@@ -1457,7 +1479,7 @@ function renderPayments(){
   $('paySummary').innerHTML=`対象 ${docs.length} 件　／　未入金 <b style="color:var(--warn)">${yen(unpaidTotal)}</b>　入金済 <b style="color:var(--ok)">${yen(paidTotal)}</b>`;
   const tb=$('payTable').querySelector('tbody');
   tb.innerHTML=docs.map(d=>`<tr>
-    <td>${esc(d.issue)}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
+    <td>${esc(docYm(d))}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
     <td>${esc(d.residentName||d.to||'')}</td><td>${yen(d.total)}</td>
     <td>${d.paid?'<span class="badge normal">入金済</span>':'<span class="badge seiho">未入金</span>'}</td>
     <td><input type="date" value="${esc(d.paidDate||'')}" onchange="setPaidDate('${d.id}',this.value)" style="max-width:150px"></td>
