@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>アロハハウス 見積・請求・領収書 作成ツール</title>
 <style>
 :root{
@@ -110,6 +113,11 @@ table.data tr:hover td{background:#fafcfe}
 .empty{text-align:center;color:var(--sub);padding:30px}
 kbd{background:#eef2f6;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:12px}
 details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
+#mc_drop{border:2px dashed var(--brand);border-radius:12px;padding:28px 16px;text-align:center;cursor:pointer;background:var(--accent);color:var(--brand-d);font-weight:700;transition:.15s}
+#mc_drop:hover{background:#dcecfb}
+#mc_drop.drag{background:#cfe6fb;border-color:var(--brand-d);transform:scale(1.01)}
+#mc_drop .big{font-size:16px}
+#mc_drop .muted{font-weight:400;margin-top:6px;font-size:13px}
 </style>
 </head>
 <body>
@@ -187,10 +195,14 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <h2>🍚 食事CSVの取込</h2>
       <p class="muted">毎月の「食事注文CSV」（日ごと・個人ごとの明細）を取り込むと、<b>入居者ごとの食事代（朝・昼・夕・おやつ・配膳）</b>を自動集計します。取り込んだ月の請求書・見積書には、この<b>実際の喫食金額</b>がそのまま反映されます（夜ご飯200円などもCSVの金額どおり）。</p>
       <div class="hint">CSVの列は「日付／曜日／区分／氏名／部屋番号／朝食／昼食／夕食／おやつ／配膳下膳(回)／朝食代／昼食代／夕食代／おやつ代／配膳下膳代／合計」を想定しています（お使いの食事注文CSVの形式）。文字コードは自動判定します。</p>
+      <label>① CSVファイルを読み込む（ドラッグ＆ドロップ対応）</label>
       <div class="grid2">
         <div>
-          <label>① CSVファイルを選ぶ</label>
-          <label class="btn" style="margin-top:4px"><input type="file" id="mc_file" accept=".csv,text/csv" style="display:none" onchange="mealCsvFile(event)">📂 CSVファイルを読み込む</label>
+          <div id="mc_drop" ondragover="mealDragOver(event)" ondragenter="mealDragOver(event)" ondragleave="mealDragLeave(event)" ondrop="mealDrop(event)" onclick="document.getElementById('mc_file').click()">
+            <div class="big">📥 ここにCSVファイルをドラッグ＆ドロップ</div>
+            <div class="muted">またはクリックしてファイルを選択</div>
+          </div>
+          <input type="file" id="mc_file" accept=".csv,text/csv" style="display:none" onchange="mealCsvFile(event)">
         </div>
         <div>
           <label>対象月（自動判定・必要なら修正）</label>
@@ -721,11 +733,24 @@ function readCsvBytesToText(buf){
   if(bad>2){try{const sjis=new TextDecoder('shift_jis',{fatal:false}).decode(bytes);if(sjis)return sjis;}catch(e){}}
   return utf8;
 }
-function mealCsvFile(ev){
-  const f=ev.target.files[0];if(!f)return;
+function readMealFile(f){
+  if(!f)return;
+  if(f.name&&!/\.csv$/i.test(f.name)&&f.type&&f.type.indexOf('csv')<0&&f.type!=='text/plain'&&f.type!==''){
+    if(!confirm('CSVファイルではないようです（'+f.name+'）。このまま取り込みますか？'))return;
+  }
   const rd=new FileReader();
   rd.onload=()=>{const text=readCsvBytesToText(rd.result);$('mc_paste').value='';processMealCsv(text);};
   rd.readAsArrayBuffer(f);
+}
+function mealCsvFile(ev){readMealFile(ev.target.files[0]);ev.target.value='';}
+function mealDragOver(e){e.preventDefault();e.stopPropagation();if(e.dataTransfer)e.dataTransfer.dropEffect='copy';const d=$('mc_drop');if(d)d.classList.add('drag');}
+function mealDragLeave(e){e.preventDefault();e.stopPropagation();const d=$('mc_drop');if(d)d.classList.remove('drag');}
+function mealDrop(e){
+  e.preventDefault();e.stopPropagation();
+  const d=$('mc_drop');if(d)d.classList.remove('drag');
+  const dt=e.dataTransfer;if(!dt)return;
+  const f=(dt.files&&dt.files[0])||null;
+  readMealFile(f);
 }
 function mealCsvParsePaste(){const t=$('mc_paste').value;if(!t.trim()){alert('貼り付け欄が空です。');return;}processMealCsv(t);}
 function clearMealCsvInput(){$('mc_paste').value='';$('mc_file').value='';mcPreview=null;$('mc_resultCard').style.display='none';}
@@ -1200,6 +1225,8 @@ function init(){
   fillSettingsForm();
   if(github.owner&&github.token){pullNow();}else{setSync(false);}
   go('home');
+  // ドロップ位置を外しても、ブラウザがファイルを開いて画面が飛ばないようにする
+  ['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();},false));
   // モーダル背景クリックで閉じない（誤操作防止）
 }
 window.onload=init;
