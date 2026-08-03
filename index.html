@@ -922,12 +922,43 @@ function renderSavedMeals(){
   el.innerHTML=keys.map(ym=>{
     const d=state.mealData[ym];const res=(d.people||[]).filter(x=>x.kubun==='入居者');
     const tot=(d.people||[]).reduce((s,x)=>s+(x.total||0),0);
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
-      <b>${esc(ym)}</b>　入居者 ${res.length}名／全${(d.people||[]).length}名　合計 ${yen(tot)}　<span class="muted">(取込 ${esc(d.importedAt||'')})</span>
-      <button class="btn danger sm" style="margin-left:8px" onclick="delMealImport('${ym}')">削除</button></div>`;
+    const match=(d.people||[]).filter(p=>state.residents.some(r=>nkey(r.name)===nkey(p.name))).length;
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--line)">
+      <b>${esc(ym)}</b>　入居者 ${res.length}名／全${(d.people||[]).length}名　合計 ${yen(tot)}　<span class="muted">(取込 ${esc(d.importedAt||'')}／登録一致 ${match}名)</span>
+      <div class="row-actions" style="margin-top:6px">
+        <button class="btn sm" onclick="batchCreateForMonth('${ym}')">📄 この月の請求書を全員分まとめて作成</button>
+        <button class="btn danger sm" onclick="delMealImport('${ym}')">削除</button>
+      </div></div>`;
   }).join('');
 }
 function delMealImport(ym){if(!confirm(ym+' の食事データを削除しますか？'))return;delete state.mealData[ym];persist();renderSavedMeals();}
+// 取込月の食事データに一致する登録入居者ぶんの請求書を一括作成
+function batchCreateForMonth(ym){
+  const md=state.mealData&&state.mealData[ym];
+  if(!md){alert('その月の食事データがありません。');return;}
+  const names=new Set((md.people||[]).map(p=>nkey(p.name)));
+  const targets=state.residents.filter(r=>names.has(nkey(r.name)));
+  if(!targets.length){alert('この月の食事データに一致する登録入居者がいません。先に入居者を同じ氏名で登録してください。');return;}
+  if(!confirm(ym+' の食事データに一致する '+targets.length+' 名の請求書をまとめて作成します。よろしいですか？\n（区分に応じて：外部＝食事のみ／生保＝ご本人あて／通常＝家賃時。作成済みの同月・同種類はスキップ）'))return;
+  // 書類作成タブの隠しフィールドを一時設定（buildDocが参照）
+  const prevMonth=$('createMonth').value, prevIssue=$('createIssue').value, prevMove=$('createMoveIn').value;
+  $('createMonth').value=ym; $('createIssue').value=todayStr();
+  let created=0, skipped=0; const madeList=[];
+  targets.forEach(r=>{
+    $('createMoveIn').value=r.movein||'';
+    const typeKey = r.external ? 'gaibu_meal' : (r.kubun==='生保' ? 'honnin' : 'seikyu_yachin');
+    if(state.documents.some(d=>d.residentId===r.id && d.month===ym && d.typeKey===typeKey)){skipped++;return;}
+    const doc=buildDoc(r,typeKey);
+    doc.number=ensureNumber(doc,true);
+    state.documents.push(JSON.parse(JSON.stringify(doc)));
+    created++; madeList.push(r.name+'（'+yen(doc.total)+'）');
+  });
+  // 復元
+  $('createMonth').value=prevMonth; $('createIssue').value=prevIssue; $('createMoveIn').value=prevMove;
+  persist();
+  alert(created+' 件の請求書を作成しました'+(skipped?'（'+skipped+' 件は作成済みのためスキップ）':'')+'。\n\n'+madeList.join('\n')+'\n\n「履歴」タブでご確認ください。');
+  renderSavedMeals();
+}
 function renderMealCsv(){renderSavedMeals();if(mcPreview)renderMcPreview();}
 
 // 取込データから請求明細を生成
