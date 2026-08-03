@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>アロハハウス 見積・請求・領収書 作成ツール</title>
+<style>
+:root{
+  --bg:#f4f6f9; --card:#ffffff; --ink:#1f2933; --sub:#5b6b7b; --line:#dfe6ee;
+  --brand:#1d6fb8; --brand-d:#155a96; --accent:#e8f2fb; --ok:#1f9d55; --warn:#c0392b;
+  --seiho:#8e44ad; --seiho-bg:#f3e9fa; --normal:#1d6fb8; --normal-bg:#e8f2fb;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Meiryo","Yu Gothic UI",sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.6}
+header.topbar{background:var(--brand);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+header.topbar h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.5px}
+header.topbar .sync{margin-left:auto;font-size:12px;display:flex;align-items:center;gap:8px}
+.dot{width:9px;height:9px;border-radius:50%;background:#c0392b;display:inline-block}
+.dot.on{background:#2ecc71}
+nav.tabs{display:flex;gap:4px;background:#fff;border-bottom:1px solid var(--line);padding:0 8px;flex-wrap:wrap;position:sticky;top:44px;z-index:40}
+nav.tabs button{background:none;border:none;padding:12px 16px;font-size:15px;color:var(--sub);cursor:pointer;border-bottom:3px solid transparent;font-weight:600}
+nav.tabs button.active{color:var(--brand);border-bottom-color:var(--brand)}
+main{max-width:1080px;margin:0 auto;padding:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.card h2{margin:0 0 14px;font-size:17px;border-left:5px solid var(--brand);padding-left:10px}
+.card h3{font-size:15px;margin:18px 0 8px;color:var(--brand-d)}
+label{display:block;font-size:13px;color:var(--sub);margin:10px 0 4px;font-weight:600}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font-size:15px;font-family:inherit;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(29,111,184,.12)}
+textarea{min-height:70px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 16px}
+@media(max-width:720px){.grid2,.grid3{grid-template-columns:1fr}}
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--brand);color:#fff;border:none;padding:10px 18px;border-radius:8px;font-size:15px;cursor:pointer;font-weight:700}
+.btn:hover{background:var(--brand-d)}
+.btn.sec{background:#eef2f6;color:var(--ink)}
+.btn.sec:hover{background:#e0e6ec}
+.btn.danger{background:#fbecea;color:var(--warn)}
+.btn.sm{padding:6px 12px;font-size:13px}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+table.data{width:100%;border-collapse:collapse;font-size:14px}
+table.data th,table.data td{border:1px solid var(--line);padding:8px 10px;text-align:left}
+table.data th{background:#f0f4f8;font-weight:700;color:var(--sub);font-size:13px}
+table.data tr:hover td{background:#fafcfe}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700}
+.badge.seiho{background:var(--seiho-bg);color:var(--seiho)}
+.badge.normal{background:var(--normal-bg);color:var(--normal)}
+.pill{display:inline-block;padding:3px 10px;border-radius:6px;background:#eef2f6;font-size:12px;margin:2px 4px 2px 0}
+.muted{color:var(--sub);font-size:13px}
+.hint{background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;padding:10px 12px;font-size:13px;color:#7a5c00;margin:10px 0}
+.doc-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:720px){.doc-type-grid{grid-template-columns:1fr}}
+.doc-type-grid button{text-align:left;padding:14px;border:2px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-size:14px}
+.doc-type-grid button:hover{border-color:var(--brand);background:var(--accent)}
+.doc-type-grid button b{display:block;font-size:15px;color:var(--brand-d);margin-bottom:2px}
+.itemtable{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+.itemtable th,.itemtable td{border:1px solid var(--line);padding:6px}
+.itemtable th{background:#f0f4f8;font-size:12px}
+.itemtable input{padding:6px;font-size:14px}
+.itemtable .num{text-align:right}
+.totalbar{display:flex;justify-content:flex-end;gap:16px;align-items:baseline;margin-top:12px;font-size:18px;font-weight:800}
+.totalbar .amt{color:var(--brand-d);font-size:24px}
+.chip{cursor:pointer;padding:8px 12px;border:2px solid var(--line);border-radius:8px;background:#fff;font-size:14px;font-weight:600}
+.chip.active{border-color:var(--brand);background:var(--accent);color:var(--brand-d)}
+.flexwrap{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* ===== Document (print) ===== */
+#printArea{display:none}
+.doc{background:#fff;width:190mm;min-height:auto;margin:0 auto;padding:14mm 15mm;color:#000;font-size:12.5px;line-height:1.5}
+.doc .dtitle{text-align:center;font-size:26px;font-weight:800;letter-spacing:12px;margin:0 0 8px;border-bottom:3px double #000;padding-bottom:6px}
+.doc .head{display:flex;justify-content:space-between;margin-top:12px}
+.doc .to{font-size:16px;font-weight:700}
+.doc .to .sub{font-size:12px;font-weight:400;margin-top:3px}
+.doc .meta{font-size:12px;text-align:right}
+.doc .meta table{border-collapse:collapse}
+.doc .meta td{padding:1px 4px}
+.doc .issuer{font-size:12px;text-align:right;line-height:1.5;margin-top:6px}
+.doc .issuer .big{font-size:14px;font-weight:700}
+.doc .lead{margin:14px 0 6px}
+.doc .bigsum{border:2px solid #000;padding:8px 12px;font-size:16px;font-weight:800;display:flex;justify-content:space-between;align-items:center;margin:8px 0 12px}
+.doc .bigsum .n{font-size:22px}
+.doc table.lines{width:100%;border-collapse:collapse;margin-top:6px}
+.doc table.lines th,.doc table.lines td{border:1px solid #444;padding:5px 7px;font-size:12px}
+.doc table.lines th{background:#eee;text-align:center}
+.doc table.lines td.n{text-align:right}
+.doc table.lines td.c{text-align:center}
+.doc .subtotal td{background:#f3f3f3;font-weight:700}
+.doc .grand td{background:#e8e8e8;font-weight:800;font-size:13px}
+.doc .bank{border:1px solid #444;padding:8px 10px;margin-top:12px;font-size:12px}
+.doc .bank b{font-size:13px}
+.doc .notes{margin-top:12px;font-size:11px;color:#222}
+.doc .notes div{margin:2px 0}
+.doc .stamp-area{display:flex;justify-content:flex-end;margin-top:4px}
+.doc .stamp{width:60px;height:60px;border:1px solid #c0392b;border-radius:50%;color:#c0392b;font-size:10px;display:flex;align-items:center;justify-content:center;text-align:center;margin-left:8px}
+.doc .receipt-amt{text-align:center;font-size:28px;font-weight:800;border-bottom:2px solid #000;padding:10px;margin:16px 0}
+.doc .tadashi{margin:10px 0;font-size:14px}
+.doc .inshi{width:90px;height:64px;border:1px solid #888;display:flex;align-items:center;justify-content:center;font-size:10px;color:#888;text-align:center}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;overflow:auto;padding:20px}
+.modal-bg.show{display:block}
+.modal{background:#fff;max-width:900px;margin:0 auto;border-radius:12px;padding:20px}
+.modal .doc{border:1px solid var(--line);box-shadow:0 4px 20px rgba(0,0,0,.15);transform-origin:top center}
+.modal-actions{position:sticky;bottom:0;background:#fff;padding-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:12px}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block;position:absolute;left:0;top:0;width:100%}
+  .doc{width:100%;margin:0;padding:8mm 10mm;page-break-after:always}
+  @page{size:A4;margin:0}
+}
+.empty{text-align:center;color:var(--sub);padding:30px}
+kbd{background:#eef2f6;border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-size:12px}
+details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <h1>🏠 見積・請求・領収書 作成ツール</h1>
+  <div class="sync"><span id="syncDot" class="dot"></span><span id="syncText">未接続（このPCのみ保存）</span></div>
+</header>
+<nav class="tabs">
+  <button data-tab="home" class="active">ホーム</button>
+  <button data-tab="residents">入居者</button>
+  <button data-tab="create">書類作成</button>
+  <button data-tab="history">履歴</button>
+  <button data-tab="settings">設定</button>
+</nav>
+<main>
+  <!-- HOME -->
+  <section id="tab-home">
+    <div class="card">
+      <h2>ようこそ</h2>
+      <p class="muted">入居者を登録すると、毎月の見積書・請求書・領収書がワンクリックで作れます。区分（通常／生保）で書式と単価が自動で切り替わります。</p>
+      <div class="row-actions">
+        <button class="btn" onclick="go('create')">＋ 書類を作成する</button>
+        <button class="btn sec" onclick="go('residents')">入居者を登録・編集</button>
+        <button class="btn sec" onclick="go('settings')">単価・会社情報の設定</button>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>登録入居者</h3><div id="homeResidents" class="muted">—</div></div>
+      <div class="card"><h3>最近作成した書類</h3><div id="homeDocs" class="muted">—</div></div>
+    </div>
+    <div class="card">
+      <details class="help"><summary>データの連動（どのPCでも使う）について</summary>
+      <p class="muted" style="margin-top:8px">「設定」タブの<b>GitHub連携</b>を設定すると、入居者データと請求履歴がクラウド（ご自身のGitHub）に保存され、どのPCの同じURLからでも同じデータが使えます。未設定でもこのPCのブラウザ内には保存されます。</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- RESIDENTS -->
+  <section id="tab-residents" style="display:none">
+    <div class="card">
+      <h2>入居者管理</h2>
+      <p class="muted">氏名・居室・区分・請求先などを一度登録すれば自動で記憶し、毎月の書類作成で呼び出せます。</p>
+      <div class="row-actions"><button class="btn" onclick="editResident()">＋ 入居者を追加</button></div>
+    </div>
+    <div class="card">
+      <table class="data" id="residentTable">
+        <thead><tr><th>氏名</th><th>居室</th><th>区分</th><th>家賃</th><th>請求先</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="residentEmpty" class="empty">まだ入居者が登録されていません。「＋ 入居者を追加」から登録してください。</div>
+    </div>
+  </section>
+
+  <!-- CREATE -->
+  <section id="tab-create" style="display:none">
+    <div class="card">
+      <h2>書類作成</h2>
+      <label>① 入居者を選ぶ</label>
+      <select id="createResident" onchange="onCreateResidentChange()"><option value="">— 入居者を選択 —</option></select>
+      <div id="createResidentInfo" class="muted" style="margin-top:6px"></div>
+      <div class="grid3">
+        <div><label>入居日</label><input type="date" id="createMoveIn"></div>
+        <div><label>対象月（この月の請求）</label><input type="month" id="createMonth"></div>
+        <div><label>発行日</label><input type="date" id="createIssue"></div>
+      </div>
+      <label style="margin-top:14px">② 作成する書類を選ぶ</label>
+      <div class="doc-type-grid" id="docTypeGrid"></div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="tab-history" style="display:none">
+    <div class="card">
+      <h2>作成履歴</h2>
+      <p class="muted">過去に作成した書類の再表示・再印刷・複製・領収書発行ができます。</p>
+      <input id="historySearch" placeholder="氏名・番号で検索" oninput="renderHistory()" style="max-width:320px">
+    </div>
+    <div class="card">
+      <table class="data" id="historyTable">
+        <thead><tr><th>発行日</th><th>種類</th><th>番号</th><th>対象者</th><th>金額</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div id="historyEmpty" class="empty">まだ書類がありません。</div>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="tab-settings" style="display:none">
+    <div class="card">
+      <h2>設定</h2>
+      <div class="flexwrap">
+        <span class="chip active" data-sset="company" onclick="showSet('company')">会社・施設</span>
+        <span class="chip" data-sset="prices" onclick="showSet('prices')">単価表</span>
+        <span class="chip" data-sset="meals" onclick="showSet('meals')">食事代</span>
+        <span class="chip" data-sset="bank" onclick="showSet('bank')">振込先・文言</span>
+        <span class="chip" data-sset="github" onclick="showSet('github')">GitHub連携</span>
+      </div>
+    </div>
+    <div class="card sset" id="sset-company">
+      <h3>会社・施設情報（書類に表示）</h3>
+      <label>住宅名</label><input id="s_housing">
+      <div class="grid2">
+        <div><label>事業者名</label><input id="s_corp"></div>
+        <div><label>代表者</label><input id="s_ceo"></div>
+      </div>
+      <label>住所</label><input id="s_addr">
+      <div class="grid2">
+        <div><label>電話番号</label><input id="s_tel"></div>
+        <div><label>会社コード（番号の頭）</label><input id="s_code"></div>
+      </div>
+    </div>
+    <div class="card sset" id="sset-prices" style="display:none">
+      <h3>単価表（月額）</h3>
+      <table class="itemtable">
+        <thead><tr><th>項目</th><th>通常 月額</th><th>生保 月額</th><th>課税</th></tr></thead>
+        <tbody>
+          <tr><td>家賃</td><td><input type="number" id="p_rent_n" class="num"></td><td><input type="number" id="p_rent_s" class="num"></td><td>非課税</td></tr>
+          <tr><td>共益費</td><td><input type="number" id="p_kyo_n" class="num"></td><td><input type="number" id="p_kyo_s" class="num"></td><td>非課税</td></tr>
+          <tr><td>生活支援サービス費</td><td><input type="number" id="p_sup_n" class="num"></td><td><input type="number" id="p_sup_s" class="num"></td><td>課税</td></tr>
+        </tbody>
+      </table>
+      <h3>初期費用・その他（通常・生保 共通）</h3>
+      <div class="grid3">
+        <div><label>入居金・敷金（一時金）</label><input type="number" id="p_nyu"></div>
+        <div><label>火災保険料（3年分）</label><input type="number" id="p_kasai"></div>
+        <div><label>光熱費 概算（見積用）</label><input type="number" id="p_kounetsu"></div>
+      </div>
+      <div class="grid2">
+        <div><label>日割の基準日数</label><input type="number" id="p_kijun"></div>
+        <div><label>生保 見積の予測日数（1ヶ月フル）</label><input type="number" id="p_yosoku"></div>
+      </div>
+    </div>
+    <div class="card sset" id="sset-meals" style="display:none">
+      <h3>食事代（1回あたりの単価）</h3>
+      <p class="muted">朝食は配膳あり、昼・夕は配膳なし（デイで喫食）で運用。金額はいつでも変更できます。書類作成時に「回数（日数）」を入れて計算します。</p>
+      <table class="itemtable">
+        <thead><tr><th>区分</th><th>食事代</th><th>配膳代</th><th>1回合計</th></tr></thead>
+        <tbody>
+          <tr><td>朝食</td><td><input type="number" id="m_asa" class="num" oninput="mealTotals()"></td><td><input type="number" id="m_asaH" class="num" oninput="mealTotals()"></td><td class="num" id="m_asaT">—</td></tr>
+          <tr><td>昼食</td><td><input type="number" id="m_hiru" class="num" oninput="mealTotals()"></td><td><input type="number" id="m_hiruH" class="num" oninput="mealTotals()"></td><td class="num" id="m_hiruT">—</td></tr>
+          <tr><td>夕食</td><td><input type="number" id="m_yoru" class="num" oninput="mealTotals()"></td><td><input type="number" id="m_yoruH" class="num" oninput="mealTotals()"></td><td class="num" id="m_yoruT">—</td></tr>
+          <tr><td>おやつ</td><td><input type="number" id="m_oya" class="num" oninput="mealTotals()"></td><td><input type="number" id="m_oyaH" class="num" oninput="mealTotals()"></td><td class="num" id="m_oyaT">—</td></tr>
+        </tbody>
+      </table>
+      <div class="muted" style="margin-top:8px">1日あたり合計（朝＋昼＋夕＋おやつ）：<b id="m_dayTotal">—</b> 円</div>
+    </div>
+    <div class="card sset" id="sset-bank" style="display:none">
+      <h3>お振込先・文言（請求書に表示）</h3>
+      <div class="grid2">
+        <div><label>銀行・支店</label><input id="b_bank"></div>
+        <div><label>種別・口座番号</label><input id="b_acc"></div>
+      </div>
+      <label>口座名義</label><input id="b_holder">
+      <label>ご案内文</label><textarea id="b_notice"></textarea>
+      <label>生保・援護課あての宛名（既定）</label><input id="b_engo" placeholder="例：町田市 生活援護課">
+    </div>
+    <div class="card sset" id="sset-github" style="display:none">
+      <h3>GitHub連携（データ連動）</h3>
+      <div class="hint">ここを設定すると、入居者データと請求履歴がGitHub上の<b>非公開リポジトリ</b>に保存され、どのPCの同じURLからでも同じデータが使えます。トークンはこのブラウザ内だけに保存されます。</div>
+      <div class="grid2">
+        <div><label>GitHubユーザー名（owner）</label><input id="g_owner" placeholder="例：ikeikecompany"></div>
+        <div><label>データ用リポジトリ名</label><input id="g_repo" placeholder="例：seikyu-data"></div>
+      </div>
+      <div class="grid2">
+        <div><label>ブランチ</label><input id="g_branch" placeholder="main" value="main"></div>
+        <div><label>ファイル名</label><input id="g_path" placeholder="data.json" value="data.json"></div>
+      </div>
+      <label>アクセストークン（fine-grained PAT / Contents: Read&Write）</label>
+      <input id="g_token" type="password" placeholder="github_pat_...">
+      <div class="row-actions">
+        <button class="btn" onclick="saveGithubConfig()">接続して同期</button>
+        <button class="btn sec" onclick="pullNow()">クラウドから読込</button>
+        <button class="btn sec" onclick="pushNow()">クラウドへ保存</button>
+        <button class="btn danger" onclick="disconnectGithub()">連携解除</button>
+      </div>
+      <div id="g_status" class="muted" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <div class="row-actions">
+        <button class="btn" onclick="saveSettingsFromForm()">設定を保存</button>
+        <button class="btn sec" onclick="exportBackup()">バックアップ書出し(JSON)</button>
+        <label class="btn sec" style="margin:0"><input type="file" id="importFile" accept="application/json" style="display:none" onchange="importBackup(event)">バックアップ読込</label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Resident modal -->
+<div class="modal-bg" id="residentModal">
+  <div class="modal">
+    <h2 id="rmTitle">入居者を追加</h2>
+    <div class="grid2">
+      <div><label>氏名 <span style="color:var(--warn)">*</span></label><input id="rm_name"></div>
+      <div><label>居室番号</label><input id="rm_room"></div>
+    </div>
+    <div class="grid2">
+      <div><label>区分</label><select id="rm_kubun"><option value="通常">通常</option><option value="生保">生保（生活保護）</option></select></div>
+      <div><label>入居日</label><input type="date" id="rm_movein"></div>
+    </div>
+    <div class="grid2">
+      <div><label>請求先（宛先）</label><input id="rm_billto" placeholder="例：ご家族名／町田市 生活援護課"></div>
+      <div><label>ご担当者・ご家族</label><input id="rm_tanto"></div>
+    </div>
+    <div class="grid2">
+      <div><label>光熱費区分</label><select id="rm_kounetsu"><option value="イケイケ立替">イケイケ立替（家賃と同時引落し）</option><option value="個人契約">個人契約（請求対象外）</option></select></div>
+      <div><label>宛先区分</label><select id="rm_atesaki"><option value="請求先">請求先／担当者あて</option><option value="ご家族">ご家族あて</option></select></div>
+    </div>
+    <label>ご家族あて氏名（宛先区分＝ご家族のとき）</label><input id="rm_family">
+    <h3>個別単価（空欄なら設定の単価を使用）</h3>
+    <div class="grid3">
+      <div><label>家賃(月額)</label><input type="number" id="rm_rent"></div>
+      <div><label>共益費(月額)</label><input type="number" id="rm_kyo"></div>
+      <div><label>生活支援(月額)</label><input type="number" id="rm_sup"></div>
+    </div>
+    <label>メモ</label><input id="rm_note">
+    <div class="modal-actions">
+      <button class="btn" onclick="saveResident()">保存</button>
+      <button class="btn sec" onclick="closeModal('residentModal')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Document editor modal -->
+<div class="modal-bg" id="docModal">
+  <div class="modal">
+    <h2 id="dmTitle">書類の作成</h2>
+    <div class="grid3">
+      <div><label>宛先</label><input id="dm_to"></div>
+      <div><label>宛先の敬称</label><select id="dm_keisho"><option value="御中">御中</option><option value="様">様</option></select></div>
+      <div><label>ご担当（任意）</label><input id="dm_tanto"></div>
+    </div>
+    <div class="grid3">
+      <div><label>発行日</label><input type="date" id="dm_issue"></div>
+      <div><label>番号</label><input id="dm_number"></div>
+      <div><label id="dm_dueLabel">お支払期限</label><input type="date" id="dm_due"></div>
+    </div>
+    <div id="dm_receiptExtra" style="display:none">
+      <div class="grid2">
+        <div><label>但し書き（〇〇代として）</label><input id="dm_tadashi"></div>
+        <div><label>領収金額</label><input type="number" id="dm_receiptAmt" oninput="renderDocPreview()"></div>
+      </div>
+    </div>
+    <h3>明細（金額・数量は自由に編集できます。チェックを外すと合計から除外）</h3>
+    <table class="itemtable" id="dm_items">
+      <thead><tr><th style="width:34px">計</th><th>項目</th><th style="width:90px">単価/月額</th><th style="width:64px">数量</th><th style="width:70px">基準</th><th style="width:100px">金額</th><th>摘要</th><th style="width:34px"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="row-actions"><button class="btn sec sm" onclick="addItemRow()">＋ 行を追加</button></div>
+    <div class="totalbar">合計（税込）<span class="amt" id="dm_total">¥0</span></div>
+    <label>備考</label><textarea id="dm_notes"></textarea>
+    <label class="flexwrap" style="margin-top:10px"><input type="checkbox" id="dm_showBank" style="width:auto" onchange="renderDocPreview()"> 振込先を表示する</label>
+    <div class="modal-actions">
+      <button class="btn" onclick="saveAndPreview()">保存してプレビュー</button>
+      <button class="btn sec" onclick="renderDocPreview()">プレビュー更新</button>
+      <button class="btn sec" onclick="closeModal('docModal')">閉じる</button>
+    </div>
+    <div style="margin-top:16px" id="dm_previewWrap"><div id="dm_preview"></div></div>
+  </div>
+</div>
+
+<!-- Preview / print modal (from history) -->
+<div class="modal-bg" id="viewModal">
+  <div class="modal">
+    <div id="view_preview"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="doPrint()">🖨 印刷 / PDF保存</button>
+      <button class="btn sec" onclick="closeModal('viewModal')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<div id="printArea"></div>
+
+<script>
+/* ============================================================
+   データ構造と既定値
+   ============================================================ */
+const LS_KEY='seikyu_data_v1';
+const LS_CFG='seikyu_github_cfg_v1';
+function defaultState(){return{
+  settings:{
+    company:{housing:'サービス付き高齢者向け住宅 アロハハウス',corp:'株式会社イケイケカンパニー',addr:'〒194-0022 東京都町田市森野4-17-17',tel:'TEL: 042-785-5023',ceo:'代表取締役 池田 友子',code:'KM'},
+    prices:{rent_n:70000,rent_s:53700,kyo_n:30000,kyo_s:0,sup_n:30000,sup_s:30000,nyu:210000,kasai:12530,kounetsu:15000,kijun:30,yosoku:30},
+    meals:{asa:500,asaH:150,hiru:500,hiruH:0,yoru:500,yoruH:0,oya:0,oyaH:0},
+    bank:{bank:'きらぼし銀行（0137）町田支店（810）',acc:'普通　7909420',holder:'カ）イケイケカンパニー',
+      notice:'お手数をおかけいたしますが、下記口座まで期限までにお振込みくださいますようお願い申し上げます。なお、振込手数料はご負担くださいますようお願い申し上げます。',
+      engo:'町田市 生活援護課'}
+  },
+  residents:[],
+  documents:[],
+  counters:{byYm:{},batch:{}}
+};}
+let state=defaultState();
+let github={owner:'',repo:'',branch:'main',path:'data.json',token:'',sha:null,connected:false};
+let currentDoc=null; // editing doc
+
+/* ============================================================
+   ユーティリティ
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const yen=n=>'¥'+Math.round(n||0).toLocaleString('ja-JP');
+const num=n=>Math.round(n||0).toLocaleString('ja-JP');
+function todayStr(){const d=new Date();return d.toISOString().slice(0,10);}
+function pad2(n){return String(n).padStart(2,'0');}
+function parseD(s){if(!s)return null;const d=new Date(s+'T00:00:00');return isNaN(d)?null:d;}
+function daysInMonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0).getDate();}
+function moveInDays(d){return daysInMonth(d)-d.getDate()+1;}
+function hiwari(monthly,days,kijun){return Math.floor((monthly*days)/kijun);}
+function addMonths(d,m){const x=new Date(d);x.setMonth(x.getMonth()+m);return x;}
+function endOfMonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0);}
+function fmtDate(d){if(!d)return'';return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';}
+function fmtWareki(d){if(!d)return'';try{return new Intl.DateTimeFormat('ja-JP-u-ca-japanese',{era:'long',year:'numeric',month:'long',day:'numeric'}).format(d);}catch(e){return fmtDate(d);}}
+function uid(){return 'r'+Math.random().toString(36).slice(2,9);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ============================================================
+   保存 / 読込（ローカル＋GitHub）
+   ============================================================ */
+function saveLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(state));}catch(e){}}
+function loadLocal(){try{const s=localStorage.getItem(LS_KEY);if(s){state=Object.assign(defaultState(),JSON.parse(s));state.counters=state.counters||{byYm:{},batch:{}};}}catch(e){}}
+function loadCfg(){try{const c=localStorage.getItem(LS_CFG);if(c){Object.assign(github,JSON.parse(c));}}catch(e){}}
+function saveCfg(){try{localStorage.setItem(LS_CFG,JSON.stringify({owner:github.owner,repo:github.repo,branch:github.branch,path:github.path,token:github.token}));}catch(e){}}
+
+let saveTimer=null;
+function persist(){saveLocal();if(github.connected){clearTimeout(saveTimer);saveTimer=setTimeout(pushNow,1200);}}
+
+function utf8ToB64(s){const b=new TextEncoder().encode(s);let bin='';for(const x of b)bin+=String.fromCharCode(x);return btoa(bin);}
+function b64ToUtf8(b){const bin=atob(b.replace(/\s/g,''));const arr=Uint8Array.from(bin,c=>c.charCodeAt(0));return new TextDecoder().decode(arr);}
+function ghUrl(){return `https://api.github.com/repos/${github.owner}/${github.repo}/contents/${github.path}`;}
+function ghHeaders(){return{'Authorization':'Bearer '+github.token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};}
+
+async function pullNow(){
+  if(!github.owner||!github.repo||!github.token){setSync(false,'連携情報が未入力です');return;}
+  setSync(false,'クラウドから読込中…');
+  try{
+    const r=await fetch(ghUrl()+'?ref='+encodeURIComponent(github.branch)+'&t='+Date.now(),{headers:ghHeaders()});
+    if(r.status===404){github.connected=true;github.sha=null;setSync(true,'接続OK（クラウドは空。現在のデータを保存できます）');return;}
+    if(!r.ok){throw new Error('HTTP '+r.status);}
+    const j=await r.json();github.sha=j.sha;
+    const data=JSON.parse(b64ToUtf8(j.content));
+    state=Object.assign(defaultState(),data);state.counters=state.counters||{byYm:{},batch:{}};
+    github.connected=true;saveLocal();renderAll();
+    setSync(true,'クラウドと同期済み（最終読込 '+new Date().toLocaleTimeString('ja-JP')+'）');
+  }catch(e){setSync(false,'読込エラー：'+e.message);}
+}
+async function pushNow(){
+  if(!github.owner||!github.repo||!github.token){setSync(false,'連携情報が未入力です');return;}
+  try{
+    // 最新shaを取得（競合回避）
+    try{const g=await fetch(ghUrl()+'?ref='+encodeURIComponent(github.branch)+'&t='+Date.now(),{headers:ghHeaders()});if(g.ok){const gj=await g.json();github.sha=gj.sha;}else if(g.status===404){github.sha=null;}}catch(e){}
+    const body={message:'update data '+new Date().toISOString(),content:utf8ToB64(JSON.stringify(state,null,2)),branch:github.branch};
+    if(github.sha)body.sha=github.sha;
+    const r=await fetch(ghUrl(),{method:'PUT',headers:ghHeaders(),body:JSON.stringify(body)});
+    if(!r.ok){const t=await r.text();throw new Error('HTTP '+r.status+' '+t.slice(0,120));}
+    const j=await r.json();github.sha=j.content.sha;github.connected=true;
+    setSync(true,'クラウドへ保存済み（'+new Date().toLocaleTimeString('ja-JP')+'）');
+  }catch(e){setSync(false,'保存エラー：'+e.message);}
+}
+function setSync(on,msg){
+  $('syncDot').className='dot'+(on?' on':'');
+  $('syncText').textContent=on?'連動中':(github.owner?'連携エラー':'未接続（このPCのみ保存）');
+  if($('g_status'))$('g_status').textContent=msg||'';
+}
+async function saveGithubConfig(){
+  github.owner=$('g_owner').value.trim();github.repo=$('g_repo').value.trim();
+  github.branch=($('g_branch').value.trim()||'main');github.path=($('g_path').value.trim()||'data.json');
+  github.token=$('g_token').value.trim();
+  saveCfg();
+  await pullNow();
+  // クラウドが空なら現在のデータを初回保存
+  if(github.connected&&github.sha===null){await pushNow();}
+}
+function disconnectGithub(){github={owner:'',repo:'',branch:'main',path:'data.json',token:'',sha:null,connected:false};localStorage.removeItem(LS_CFG);$('g_owner').value='';$('g_repo').value='';$('g_token').value='';setSync(false,'連携を解除しました');}
+
+/* ============================================================
+   画面切替
+   ============================================================ */
+function go(tab){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  ['home','residents','create','history','settings'].forEach(t=>$('tab-'+t).style.display=(t===tab?'':'none'));
+  if(tab==='home')renderHome();
+  if(tab==='residents')renderResidents();
+  if(tab==='create')renderCreate();
+  if(tab==='history')renderHistory();
+  if(tab==='settings')fillSettingsForm();
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.tab));
+function showSet(k){document.querySelectorAll('.chip[data-sset]').forEach(c=>c.classList.toggle('active',c.dataset.sset===k));document.querySelectorAll('.sset').forEach(s=>s.style.display=(s.id==='sset-'+k?'':'none'));}
+function closeModal(id){$(id).classList.remove('show');}
+function openModal(id){$(id).classList.add('show');}
+
+/* ============================================================
+   ホーム
+   ============================================================ */
+function renderHome(){
+  const r=state.residents;
+  $('homeResidents').innerHTML=r.length? r.map(x=>`<span class="pill">${esc(x.name)} <span class="badge ${x.kubun==='生保'?'seiho':'normal'}">${x.kubun}</span></span>`).join('') : '未登録';
+  const docs=[...state.documents].sort((a,b)=>b.issue.localeCompare(a.issue)).slice(0,6);
+  $('homeDocs').innerHTML=docs.length? docs.map(d=>`<div>・${esc(d.issue)}　${esc(d.typeLabel)}　${esc(d.residentName)}　<b>${yen(d.total)}</b></div>`).join('') : 'まだありません';
+}
+
+/* ============================================================
+   入居者
+   ============================================================ */
+function renderResidents(){
+  const tb=$('residentTable').querySelector('tbody');
+  tb.innerHTML=state.residents.map(r=>`<tr>
+    <td>${esc(r.name)}</td><td>${esc(r.room||'')}</td>
+    <td><span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span></td>
+    <td>${num(effRent(r))}</td><td>${esc(r.billto||'')}</td>
+    <td><button class="btn sec sm" onclick="editResident('${r.id}')">編集</button>
+        <button class="btn sec sm" onclick="quickCreate('${r.id}')">書類作成</button>
+        <button class="btn danger sm" onclick="delResident('${r.id}')">削除</button></td></tr>`).join('');
+  $('residentEmpty').style.display=state.residents.length?'none':'';
+  $('residentTable').style.display=state.residents.length?'':'none';
+}
+function effRent(r){return r.rent!=null&&r.rent!==''?+r.rent:(r.kubun==='生保'?state.settings.prices.rent_s:state.settings.prices.rent_n);}
+function effKyo(r){return r.kyo!=null&&r.kyo!==''?+r.kyo:(r.kubun==='生保'?state.settings.prices.kyo_s:state.settings.prices.kyo_n);}
+function effSup(r){return r.sup!=null&&r.sup!==''?+r.sup:(r.kubun==='生保'?state.settings.prices.sup_s:state.settings.prices.sup_n);}
+let editingResidentId=null;
+function editResident(id){
+  editingResidentId=id||null;
+  const r=id?state.residents.find(x=>x.id===id):{};
+  $('rmTitle').textContent=id?'入居者を編集':'入居者を追加';
+  $('rm_name').value=r.name||'';$('rm_room').value=r.room||'';$('rm_kubun').value=r.kubun||'通常';
+  $('rm_movein').value=r.movein||'';$('rm_billto').value=r.billto||'';$('rm_tanto').value=r.tanto||'';
+  $('rm_kounetsu').value=r.kounetsu||'イケイケ立替';$('rm_atesaki').value=r.atesaki||'請求先';$('rm_family').value=r.family||'';
+  $('rm_rent').value=r.rent!=null?r.rent:'';$('rm_kyo').value=r.kyo!=null?r.kyo:'';$('rm_sup').value=r.sup!=null?r.sup:'';
+  $('rm_note').value=r.note||'';
+  openModal('residentModal');
+}
+function saveResident(){
+  const name=$('rm_name').value.trim();if(!name){alert('氏名を入力してください');return;}
+  const obj={id:editingResidentId||uid(),name,room:$('rm_room').value.trim(),kubun:$('rm_kubun').value,
+    movein:$('rm_movein').value,billto:$('rm_billto').value.trim(),tanto:$('rm_tanto').value.trim(),
+    kounetsu:$('rm_kounetsu').value,atesaki:$('rm_atesaki').value,family:$('rm_family').value.trim(),
+    rent:$('rm_rent').value===''?null:+$('rm_rent').value,kyo:$('rm_kyo').value===''?null:+$('rm_kyo').value,sup:$('rm_sup').value===''?null:+$('rm_sup').value,
+    note:$('rm_note').value.trim()};
+  if(editingResidentId){const i=state.residents.findIndex(x=>x.id===editingResidentId);state.residents[i]=obj;}
+  else state.residents.push(obj);
+  persist();closeModal('residentModal');renderResidents();
+}
+function delResident(id){if(!confirm('この入居者を削除しますか？（作成済みの書類は残ります）'))return;state.residents=state.residents.filter(x=>x.id!==id);persist();renderResidents();}
+function quickCreate(id){go('create');$('createResident').value=id;onCreateResidentChange();}
+
+/* ============================================================
+   書類作成：種類定義
+   ============================================================ */
+// suffix: 番号の末尾記号
+const DOC_TYPES_NORMAL=[
+  {key:'mitsumori',label:'見積書（初回・入居時）',suffix:'M',docTitle:'見 積 書',desc:'入居初月の日割＋入居金・火災保険をまとめた初回見積'},
+  {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
+  {key:'seikyu_yachin',label:'請求書（家賃時・月次）',suffix:'R',docTitle:'請 求 書',desc:'家賃・共益費・食費・生活支援の日割／月次'},
+  {key:'karioosae',label:'仮押さえ請求書',suffix:'K',docTitle:'請 求 書',desc:'家賃1ヶ月分の前金（お部屋の確保）'},
+  {key:'ryoshu',label:'領収書',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
+];
+const DOC_TYPES_SEIHO=[
+  {key:'mitsumori_s',label:'見積書（1ヶ月フル予測）',suffix:'M',docTitle:'見 積 書',desc:'1ヶ月あたりにかかる総額を予測して提示'},
+  {key:'engo',label:'援護課あて（家賃分）',suffix:'G',docTitle:'請 求 書',desc:'住宅使用料（家賃分）。援護課へ送る書類'},
+  {key:'honnin',label:'ご本人あて請求書（家賃以外）',suffix:'H',docTitle:'請 求 書',desc:'食費・おやつ・生活支援・光熱費など、家賃以外の本当の請求書'},
+  {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
+  {key:'ryoshu',label:'領収書',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
+];
+function renderCreate(){
+  const sel=$('createResident');const cur=sel.value;
+  sel.innerHTML='<option value="">— 入居者を選択 —</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}（${r.kubun}${r.room?'・'+esc(r.room):''}）</option>`).join('');
+  sel.value=cur;
+  if(!$('createIssue').value)$('createIssue').value=todayStr();
+  if(!$('createMonth').value)$('createMonth').value=todayStr().slice(0,7);
+  onCreateResidentChange();
+}
+function onCreateResidentChange(){
+  const r=state.residents.find(x=>x.id===$('createResident').value);
+  const info=$('createResidentInfo');const grid=$('docTypeGrid');
+  if(!r){info.textContent='';grid.innerHTML='<div class="muted">先に入居者を選択してください。</div>';return;}
+  if(r.movein&&!$('createMoveIn').value)$('createMoveIn').value=r.movein;
+  info.innerHTML=`<span class="badge ${r.kubun==='生保'?'seiho':'normal'}">${r.kubun}</span> 居室:${esc(r.room||'—')}／請求先:${esc(r.billto||'—')}／家賃:${num(effRent(r))}円`;
+  const types=r.kubun==='生保'?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL;
+  grid.innerHTML=types.map(t=>`<button onclick="openDoc('${r.id}','${t.key}')"><b>${esc(t.label)}</b><span class="muted">${esc(t.desc)}</span></button>`).join('');
+}
+
+/* ============================================================
+   明細生成ロジック
+   ============================================================ */
+function mealLines(r,count,label){
+  const m=state.settings.meals;const days=count;
+  const rows=[];
+  const add=(nm,meal,haizen)=>{const t=(+meal||0)+(+haizen||0);if(t>0)rows.push({name:nm,tanka:t,qty:days,kijun:'回',amount:t*days,tekiyo:(haizen>0?`食事${meal}＋配膳${haizen}`:`1回 ${meal}円`),inc:true});};
+  add('朝食'+(label?`（${label}）`:''),m.asa,m.asaH);
+  add('昼食'+(label?`（${label}）`:''),m.hiru,m.hiruH);
+  add('夕食'+(label?`（${label}）`:''),m.yoru,m.yoruH);
+  add('おやつ'+(label?`（${label}）`:''),m.oya,m.oyaH);
+  return rows;
+}
+function kounetsuLine(r,type){
+  const p=state.settings.prices;
+  if(r.kounetsu==='個人契約')return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:0,tekiyo:'個人契約のため請求対象外',inc:false};
+  if(type==='mitsumori'||type==='mitsumori_s')return{name:'ガス・水道・電気（概算）',tanka:'－',qty:'－',kijun:'－',amount:+p.kounetsu,tekiyo:'光熱費の概算（実費精算）',inc:true};
+  return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:0,tekiyo:'イケイケ立替・家賃と同時に口座引落し（実費）',inc:false};
+}
+function buildDoc(r,typeKey){
+  const p=state.settings.prices;const kijun=+p.kijun||30;
+  const move=parseD($('createMoveIn').value||r.movein);
+  const monthStr=$('createMonth').value||todayStr().slice(0,7);
+  const monthD=parseD(monthStr+'-01');
+  const issue=parseD($('createIssue').value||todayStr());
+  const isSeiho=r.kubun==='生保';
+  const rent=effRent(r),kyo=effKyo(r),sup=effSup(r);
+  const types=isSeiho?DOC_TYPES_SEIHO:DOC_TYPES_NORMAL;
+  const t=types.find(x=>x.key===typeKey);
+  let items=[],notes=[],dueLabel='お支払期限',due=null,showBank=true,lead='',subGroups=null,to='',keisho='御中',tanto='';
+  const daysMove=move?moveInDays(move):0;
+  // 宛先の既定
+  if(typeKey==='engo'){to=state.settings.bank.engo||r.billto||'';keisho='御中';}
+  else if(typeKey==='honnin'){to=(r.atesaki==='ご家族'&&r.family)?r.family:r.name;keisho='様';}
+  else if(typeKey==='ryoshu'){to=(r.atesaki==='ご家族'&&r.family)?r.family:(isSeiho?r.name:(r.billto||r.name));keisho=to.includes('課')?'御中':'様';}
+  else if(r.atesaki==='ご家族'&&r.family){to=r.family;keisho='様';}
+  else {to=r.billto||r.name;keisho=(to.includes('課')||to.includes('御中'))?'御中':'様';}
+  if(r.tanto&&keisho==='御中')tanto=r.tanto;
+
+  const rentLine=(days)=>({name:'家賃',tanka:rent,qty:days,kijun:kijun,amount:hiwari(rent,days,kijun),tekiyo:'住宅使用料の日割り（非課税）',inc:true});
+  const kyoLine=(days)=>({name:'共益費',tanka:kyo,qty:days,kijun:kijun,amount:hiwari(kyo,days,kijun),tekiyo:'共用部維持管理費の日割り（非課税）',inc:true});
+  const supLine=(days)=>({name:'生活支援サービス費',tanka:sup,qty:days,kijun:kijun,amount:hiwari(sup,days,kijun),tekiyo:'安否確認等サービスの日割り（課税）',inc:true});
+  const rentFull=()=>({name:'家賃',tanka:rent,qty:'1ヶ月',kijun:'－',amount:rent,tekiyo:'住宅使用料（月額・非課税）',inc:true});
+  const kyoFull=()=>({name:'共益費',tanka:kyo,qty:'1ヶ月',kijun:'－',amount:kyo,tekiyo:'共用部維持管理費（月額）',inc:true});
+  const supFull=()=>({name:'生活支援サービス費',tanka:sup,qty:'1ヶ月',kijun:'－',amount:sup,tekiyo:'安否確認等サービス（月額・課税）',inc:true});
+  const nyuLine=()=>({name:'入居金・敷金',tanka:'－',qty:'－',kijun:'－',amount:+p.nyu,tekiyo:'入居時一時金（初回のみ・日割対象外・非課税）',inc:true});
+  const kasaiLine=()=>({name:'火災保険料',tanka:'－',qty:'－',kijun:'－',amount:+p.kasai,tekiyo:'損保ジャパン（3年分一括・非課税）',inc:true});
+
+  if(typeKey==='mitsumori'){ // 通常・初回見積
+    lead='下記のとおりお見積り申し上げます。';
+    items=[rentLine(daysMove),kyoLine(daysMove),...mealLines(r,daysMove),supLine(daysMove),kounetsuLine(r,'mitsumori'),nyuLine(),kasaiLine()];
+    dueLabel='お振込期限';due=move?addMonths(move,1):endOfMonth(issue);
+    notes=['入居月分（家賃・共益費・食費・生活支援サービス費）は「1ヶ月＝'+kijun+'日」を基準に日割り（円未満切捨）。翌月以降は満額です。',
+      '家賃・火災保険料・入居金は消費税非課税。食費・生活支援サービス費・光熱費は課税。',
+      '朝食は食事代＋配膳代、昼・夕は配膳なし（デイにて喫食）で計算しています。',
+      '光熱費は実費とし別途精算します。','本見積書の有効期限は発行日より1ヶ月です。'];
+  }else if(typeKey==='mitsumori_s'){ // 生保・1ヶ月フル予測
+    const yosoku=+p.yosoku||30;
+    lead='下記のとおり、1ヶ月あたりにかかる費用をお見積り（予測）申し上げます。';
+    items=[rentFull()];
+    if(kyo>0)items.push(kyoFull());
+    items.push(...mealLines(r,yosoku,'予測'+yosoku+'日'),supFull(),kounetsuLine(r,'mitsumori_s'));
+    // 初回のみ
+    items.push(nyuLine(),kasaiLine());
+    dueLabel='お振込期限';due=move?addMonths(move,1):endOfMonth(issue);
+    notes=['本見積は1ヶ月あたりにかかる費用の予測です（食費は '+yosoku+'日 で試算）。',
+      '入居金・火災保険料は初回のみ（日割対象外）。家賃・火災保険料・入居金は非課税、食費・生活支援サービス費・光熱費は課税。',
+      '家賃分は援護課（住宅扶助）へ、家賃以外はご本人へご請求します。','光熱費は実費・概算です。'];
+  }else if(typeKey==='seikyu_nyukin'){ // 入居金請求
+    lead='下記のとおりご請求申し上げます。【請求区分：初期費用（入居金・火災保険料）】'+(move?'　※入居日 '+fmtWareki(move):'');
+    items=[nyuLine(),kasaiLine()];
+    dueLabel='お支払期限';due=move?addMonths(move,1):endOfMonth(issue);
+    notes=['本請求は初期費用（入居金・火災保険料）分です。','お支払期限は入居日から1ヶ月以内です。',
+      '家賃・共益費・食費・生活支援サービス費は別途ご請求します。','入居金・火災保険料は消費税非課税。'];
+  }else if(typeKey==='seikyu_yachin'){ // 通常・家賃時
+    lead='下記のとおりご請求申し上げます。【請求区分：'+(monthD?(monthD.getMonth()+1):'')+'月分 利用料】';
+    const initial=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
+    const days=initial?daysMove:kijun;
+    const mealDays=initial?daysMove:daysInMonth(monthD||issue);
+    items=[rentLine(days),kyoLine(days),...mealLines(r,mealDays),supLine(days),kounetsuLine(r,'seikyu_yachin')];
+    dueLabel='お支払期限';due=endOfMonth(monthD||issue);
+    notes=[(initial?'入居月分の日割り分と食費です。':'当月分の家賃・共益費・生活支援サービス費と食費です。'),
+      '家賃・共益費・生活支援サービス費は「1ヶ月＝'+kijun+'日」を基準に日割り（初月）。','家賃・共益費は非課税、食費・生活支援サービス費は課税。',
+      '光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。個人契約の方は請求対象外。'];
+  }else if(typeKey==='karioosae'){ // 仮押さえ
+    lead='下記のとおり、ご入居の仮押さえ前金をご請求申し上げます。【請求区分：仮押さえ前金（家賃1ヶ月分）】';
+    items=[{name:'仮押さえ前金（家賃1ヶ月分）',tanka:rent,qty:'1ヶ月',kijun:'－',amount:rent,tekiyo:'家賃1ヶ月分（非課税）。ご入居時に初回家賃へ充当',inc:true}];
+    dueLabel='お支払期限';due=endOfMonth(issue);
+    notes=['本請求はお部屋の確保（仮押さえ）のための前金（家賃1ヶ月分）です。',
+      '仮押さえの有効期間は発行日から1ヶ月です。期間内にご契約ください。',
+      'ご入居に至った場合、本前金は初回家賃に充当します。','キャンセル時の返金は契約書の定めによります。'];
+  }else if(typeKey==='engo'){ // 生保・援護課あて（家賃分）
+    lead='下記のとおりご請求申し上げます。【請求区分：住宅使用料（家賃分）】';
+    const initial=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
+    if(initial){items=[rentLine(daysMove)];}else{items=[rentFull()];}
+    dueLabel='お支払期限';due=endOfMonth(monthD||issue);showBank=true;
+    notes=['本請求は住宅使用料（家賃分）です。住宅扶助として援護課へご提出ください。',
+      '家賃は消費税非課税。','食費・生活支援サービス費・光熱費など家賃以外は、ご本人あてに別途ご請求します。'];
+  }else if(typeKey==='honnin'){ // 生保・ご本人あて（家賃以外）
+    lead='下記のとおりご請求申し上げます。【請求区分：家賃以外の利用料（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
+    const initial=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
+    const days=initial?daysMove:kijun;
+    const mealDays=initial?daysMove:daysInMonth(monthD||issue);
+    items=[...mealLines(r,mealDays),supLine(initial?daysMove:kijun)];
+    if(kyo>0)items.unshift(kyoLine(days));
+    items.push(kounetsuLine(r,'honnin'));
+    dueLabel='お支払期限';due=endOfMonth(monthD||issue);
+    notes=['本請求は家賃以外（食費・生活支援サービス費・光熱費等）です。家賃分は援護課あてに別途ご請求します。',
+      '食費・生活支援サービス費は課税。','食費は朝食（食事＋配膳）・昼・夕（配膳なし）で計算しています。',
+      '光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。個人契約の方は請求対象外。'];
+  }else if(typeKey==='ryoshu'){ // 領収書
+    lead='';showBank=false;dueLabel='';
+    items=[];
+    notes=['上記正に領収いたしました。'];
+  }
+  const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
+  return{
+    id:uid(),typeKey,typeLabel:t.label,docTitle:t.docTitle,suffix:t.suffix,
+    residentId:r.id,residentName:r.name,room:r.room,kubun:r.kubun,
+    to,keisho,tanto,issue:issue?issue.toISOString().slice(0,10):todayStr(),
+    move:move?move.toISOString().slice(0,10):'',month:monthStr,
+    number:'',items,total,notes,dueLabel,due:due?due.toISOString().slice(0,10):'',showBank,lead,
+    receiptAmt: typeKey==='ryoshu'?0:null, tadashi: typeKey==='ryoshu'?'入居に係る費用として':''
+  };
+}
+
+/* ============================================================
+   番号採番
+   ============================================================ */
+function ensureNumber(doc,persistIt){
+  const y=doc.issue.slice(0,4),mm=doc.issue.slice(5,7);const ym=y+mm;
+  const key=doc.residentId+'|'+ym;
+  let seq=state.counters.batch[key];
+  if(seq==null){seq=(state.counters.byYm[ym]||0)+1;if(persistIt){state.counters.byYm[ym]=seq;state.counters.batch[key]=seq;}}
+  return `${y}-${state.settings.company.code}-${mm}${pad2(seq)}-${doc.suffix}`;
+}
+
+/* ============================================================
+   書類エディタ
+   ============================================================ */
+function openDoc(residentId,typeKey){
+  const r=state.residents.find(x=>x.id===residentId);
+  if(!r){alert('入居者が見つかりません');return;}
+  currentDoc=buildDoc(r,typeKey);
+  currentDoc.number=ensureNumber(currentDoc,false);
+  fillDocForm();openModal('docModal');renderDocPreview();
+}
+function fillDocForm(){
+  const d=currentDoc;
+  $('dmTitle').textContent=d.docTitle.replace(/ /g,'')+'の作成 — '+d.residentName+' 様';
+  $('dm_to').value=d.to;$('dm_keisho').value=d.keisho;$('dm_tanto').value=d.tanto||'';
+  $('dm_issue').value=d.issue;$('dm_number').value=d.number;
+  $('dm_dueLabel').textContent=d.dueLabel||'期限';$('dm_due').value=d.due||'';
+  $('dm_notes').value=(d.notes||[]).join('\n');
+  $('dm_showBank').checked=!!d.showBank;
+  const isR=d.typeKey==='ryoshu';
+  $('dm_receiptExtra').style.display=isR?'':'none';
+  $('dm_items').closest ? null : null;
+  document.querySelector('#dm_items').parentElement.style.display=isR?'none':'';
+  if(isR){$('dm_tadashi').value=d.tadashi||'';$('dm_receiptAmt').value=d.receiptAmt||'';}
+  renderItemRows();
+}
+function renderItemRows(){
+  const tb=$('dm_items').querySelector('tbody');
+  tb.innerHTML=currentDoc.items.map((it,i)=>`<tr>
+    <td class="c"><input type="checkbox" ${it.inc?'checked':''} onchange="itChange(${i},'inc',this.checked)"></td>
+    <td><input value="${esc(it.name)}" onchange="itChange(${i},'name',this.value)"></td>
+    <td><input value="${esc(it.tanka)}" onchange="itChange(${i},'tanka',this.value)"></td>
+    <td><input value="${esc(it.qty)}" onchange="itChange(${i},'qty',this.value)"></td>
+    <td><input value="${esc(it.kijun)}" onchange="itChange(${i},'kijun',this.value)"></td>
+    <td><input class="num" value="${it.amount}" onchange="itChange(${i},'amount',this.value)"></td>
+    <td><input value="${esc(it.tekiyo)}" onchange="itChange(${i},'tekiyo',this.value)"></td>
+    <td class="c"><button class="btn danger sm" onclick="delItemRow(${i})">×</button></td></tr>`).join('');
+  updateTotal();
+}
+function itChange(i,k,v){
+  if(k==='amount'||k==='tanka'||k==='qty')v=(v===''||isNaN(+v))?v:(k==='amount'?+v:v);
+  currentDoc.items[i][k]=(k==='inc')?v:v;
+  if(k==='amount')currentDoc.items[i].amount=(+v||0);
+  updateTotal();renderDocPreview();
+}
+function addItemRow(){currentDoc.items.push({name:'',tanka:'',qty:'',kijun:'',amount:0,tekiyo:'',inc:true});renderItemRows();renderDocPreview();}
+function delItemRow(i){currentDoc.items.splice(i,1);renderItemRows();renderDocPreview();}
+function updateTotal(){currentDoc.total=currentDoc.items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);$('dm_total').textContent=yen(currentDoc.total);}
+
+function collectDocForm(){
+  const d=currentDoc;
+  d.to=$('dm_to').value;d.keisho=$('dm_keisho').value;d.tanto=$('dm_tanto').value;
+  d.issue=$('dm_issue').value;d.number=$('dm_number').value;d.due=$('dm_due').value;
+  d.notes=$('dm_notes').value.split('\n').filter(x=>x.trim()!=='');
+  d.showBank=$('dm_showBank').checked;
+  if(d.typeKey==='ryoshu'){d.tadashi=$('dm_tadashi').value;d.receiptAmt=+$('dm_receiptAmt').value||0;d.total=d.receiptAmt;}
+  else updateTotal();
+}
+function saveAndPreview(){
+  collectDocForm();
+  // 採番を確定
+  currentDoc.number=$('dm_number').value||ensureNumber(currentDoc,true);
+  if(!$('dm_number').value){$('dm_number').value=currentDoc.number;}
+  else{ensureNumber(currentDoc,true);} // consume seq for batch consistency
+  const i=state.documents.findIndex(x=>x.id===currentDoc.id);
+  if(i>=0)state.documents[i]=JSON.parse(JSON.stringify(currentDoc));
+  else state.documents.push(JSON.parse(JSON.stringify(currentDoc)));
+  persist();renderDocPreview();
+  alert('保存しました。履歴からいつでも再印刷できます。');
+}
+
+/* ============================================================
+   書類プレビューHTML
+   ============================================================ */
+function docHTML(d){
+  const st=state.settings;const c=st.company;const b=st.bank;
+  const issueD=parseD(d.issue),dueD=parseD(d.due);
+  const isReceipt=d.typeKey==='ryoshu';
+  let inner='';
+  const header=`
+    <div class="head">
+      <div class="to">
+        ${esc(d.to)}　${esc(d.keisho)}
+        ${d.tanto?`<div class="sub">ご担当：${esc(d.tanto)} 様</div>`:''}
+        ${d.residentName?`<div class="sub">対象者：${esc(d.residentName)} 様${d.room?`（${esc(c.housing)} ご入居者・居室 ${esc(d.room)}）`:''}</div>`:''}
+      </div>
+      <div class="meta">
+        <table>
+          <tr><td>発行日</td><td>${esc(fmtWareki(issueD))}</td></tr>
+          <tr><td>番号</td><td>${esc(d.number)}</td></tr>
+        </table>
+        <div class="issuer">
+          <div class="big">${esc(c.housing)}</div>
+          <div>${esc(c.corp)}</div>
+          <div>${esc(c.addr)}</div>
+          <div>${esc(c.tel)}</div>
+          <div class="stamp-area"><span>${esc(c.ceo)}</span><span class="stamp">印</span></div>
+        </div>
+      </div>
+    </div>`;
+  if(isReceipt){
+    inner=`
+      <div class="dtitle">${esc(d.docTitle)}</div>
+      ${header}
+      <div class="receipt-amt">金 ${yen(d.receiptAmt||d.total)} －</div>
+      <div class="tadashi">但し　${esc(d.tadashi||'')}　として</div>
+      <div>上記正に領収いたしました。</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px">
+        <div class="inshi">${(d.receiptAmt||d.total)>=50000?'収入印紙<br>貼付欄':'（5万円未満<br>印紙不要）'}</div>
+        <div class="muted" style="font-size:11px">※ 売上代金に係る受取書</div>
+      </div>`;
+  }else{
+    const rows=d.items.map(it=>{
+      const style=it.inc?'':'style="color:#999"';
+      return `<tr ${style}><td>${esc(it.name)}</td><td class="n">${it.tanka==='－'||it.tanka===''?esc(it.tanka||'－'):num(it.tanka)}</td><td class="c">${esc(it.qty)}</td><td class="c">${esc(it.kijun)}</td><td class="n">${it.inc?num(it.amount):'（対象外）'}</td><td>${esc(it.tekiyo)}</td></tr>`;
+    }).join('');
+    inner=`
+      <div class="dtitle">${esc(d.docTitle)}</div>
+      ${header}
+      ${d.lead?`<div class="lead">${esc(d.lead)}</div>`:''}
+      <div class="bigsum"><span>${d.docTitle.includes('見積')?'お見積金額（税込）':'ご請求金額（税込）'}</span><span class="n">${yen(d.total)}</span></div>
+      <table class="lines">
+        <thead><tr><th>項　目</th><th>単価/月額</th><th>数量</th><th>基準</th><th>金額(円)</th><th>摘　要</th></tr></thead>
+        <tbody>${rows}
+          <tr class="grand"><td colspan="4">合計（税込）</td><td class="n">${num(d.total)}</td><td></td></tr>
+        </tbody>
+      </table>
+      ${d.showBank?`
+      <div class="bank">
+        <div>${esc(b.notice)}</div>
+        <div style="margin-top:6px"><b>【お振込先】</b> ${esc(b.bank)}　${esc(b.acc)}　${esc(b.holder)}</div>
+        ${dueD?`<div><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD))}</div>`:''}
+      </div>`:(dueD?`<div class="bank"><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD))}</div>`:'')}
+      ${d.notes&&d.notes.length?`<div class="notes"><b>【備考】</b>${d.notes.map(n=>`<div>・${esc(n)}</div>`).join('')}</div>`:''}`;
+  }
+  return `<div class="doc">${inner}</div>`;
+}
+function renderDocPreview(){collectDocForm();$('dm_preview').innerHTML=docHTML(currentDoc);}
+
+/* ============================================================
+   履歴
+   ============================================================ */
+function renderHistory(){
+  const q=($('historySearch').value||'').trim();
+  let docs=[...state.documents].sort((a,b)=>b.issue.localeCompare(a.issue)||b.number.localeCompare(a.number));
+  if(q)docs=docs.filter(d=>(d.residentName+d.number+d.typeLabel).includes(q));
+  const tb=$('historyTable').querySelector('tbody');
+  tb.innerHTML=docs.map(d=>`<tr>
+    <td>${esc(d.issue)}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
+    <td>${esc(d.residentName)}</td><td>${yen(d.total)}</td>
+    <td><button class="btn sec sm" onclick="viewDoc('${d.id}')">表示/印刷</button>
+        <button class="btn sec sm" onclick="reopenDoc('${d.id}')">編集</button>
+        <button class="btn sec sm" onclick="makeReceipt('${d.id}')">領収書</button>
+        <button class="btn danger sm" onclick="delDoc('${d.id}')">削除</button></td></tr>`).join('');
+  $('historyEmpty').style.display=docs.length?'none':'';
+  $('historyTable').style.display=docs.length?'':'none';
+}
+function viewDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;$('view_preview').innerHTML=docHTML(d);openModal('viewModal');window._printDoc=d;}
+function reopenDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;currentDoc=JSON.parse(JSON.stringify(d));fillDocForm();openModal('docModal');renderDocPreview();}
+function delDoc(id){if(!confirm('この書類を削除しますか？'))return;state.documents=state.documents.filter(x=>x.id!==id);persist();renderHistory();}
+function makeReceipt(id){
+  const src=state.documents.find(x=>x.id===id);if(!src)return;
+  const r=state.residents.find(x=>x.id===src.residentId)||{};
+  const d=JSON.parse(JSON.stringify(src));
+  d.id=uid();d.typeKey='ryoshu';d.docTitle='領 収 書';d.suffix='Y';d.typeLabel='領収書';
+  d.receiptAmt=src.total;d.total=src.total;d.tadashi=src.typeLabel+'（'+src.number+'）の代金として';
+  d.showBank=false;d.lead='';d.notes=['上記正に領収いたしました。'];
+  d.issue=todayStr();d.number=ensureNumber(d,false);
+  currentDoc=d;fillDocForm();openModal('docModal');renderDocPreview();
+}
+
+/* ============================================================
+   印刷
+   ============================================================ */
+function doPrint(){
+  const d=window._printDoc||currentDoc;if(!d)return;
+  $('printArea').innerHTML=docHTML(d);
+  window.print();
+}
+
+/* ============================================================
+   設定フォーム
+   ============================================================ */
+function fillSettingsForm(){
+  const c=state.settings.company,p=state.settings.prices,m=state.settings.meals,b=state.settings.bank;
+  $('s_housing').value=c.housing;$('s_corp').value=c.corp;$('s_ceo').value=c.ceo;$('s_addr').value=c.addr;$('s_tel').value=c.tel;$('s_code').value=c.code;
+  $('p_rent_n').value=p.rent_n;$('p_rent_s').value=p.rent_s;$('p_kyo_n').value=p.kyo_n;$('p_kyo_s').value=p.kyo_s;$('p_sup_n').value=p.sup_n;$('p_sup_s').value=p.sup_s;
+  $('p_nyu').value=p.nyu;$('p_kasai').value=p.kasai;$('p_kounetsu').value=p.kounetsu;$('p_kijun').value=p.kijun;$('p_yosoku').value=p.yosoku;
+  $('m_asa').value=m.asa;$('m_asaH').value=m.asaH;$('m_hiru').value=m.hiru;$('m_hiruH').value=m.hiruH;$('m_yoru').value=m.yoru;$('m_yoruH').value=m.yoruH;$('m_oya').value=m.oya;$('m_oyaH').value=m.oyaH;
+  $('b_bank').value=b.bank;$('b_acc').value=b.acc;$('b_holder').value=b.holder;$('b_notice').value=b.notice;$('b_engo').value=b.engo;
+  $('g_owner').value=github.owner;$('g_repo').value=github.repo;$('g_branch').value=github.branch;$('g_path').value=github.path;$('g_token').value=github.token;
+  mealTotals();
+}
+function mealTotals(){
+  const g=(a,b)=>(+$(a).value||0)+(+$(b).value||0);
+  const at=g('m_asa','m_asaH'),ht=g('m_hiru','m_hiruH'),yt=g('m_yoru','m_yoruH'),ot=g('m_oya','m_oyaH');
+  $('m_asaT').textContent=num(at);$('m_hiruT').textContent=num(ht);$('m_yoruT').textContent=num(yt);$('m_oyaT').textContent=num(ot);
+  $('m_dayTotal').textContent=num(at+ht+yt+ot);
+}
+function saveSettingsFromForm(){
+  const s=state.settings;
+  s.company={housing:$('s_housing').value,corp:$('s_corp').value,ceo:$('s_ceo').value,addr:$('s_addr').value,tel:$('s_tel').value,code:$('s_code').value};
+  s.prices={rent_n:+$('p_rent_n').value,rent_s:+$('p_rent_s').value,kyo_n:+$('p_kyo_n').value,kyo_s:+$('p_kyo_s').value,sup_n:+$('p_sup_n').value,sup_s:+$('p_sup_s').value,nyu:+$('p_nyu').value,kasai:+$('p_kasai').value,kounetsu:+$('p_kounetsu').value,kijun:+$('p_kijun').value,yosoku:+$('p_yosoku').value};
+  s.meals={asa:+$('m_asa').value,asaH:+$('m_asaH').value,hiru:+$('m_hiru').value,hiruH:+$('m_hiruH').value,yoru:+$('m_yoru').value,yoruH:+$('m_yoruH').value,oya:+$('m_oya').value,oyaH:+$('m_oyaH').value};
+  s.bank={bank:$('b_bank').value,acc:$('b_acc').value,holder:$('b_holder').value,notice:$('b_notice').value,engo:$('b_engo').value};
+  persist();alert('設定を保存しました。');
+}
+
+/* ============================================================
+   バックアップ
+   ============================================================ */
+function exportBackup(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='seikyu_backup_'+todayStr()+'.json';a.click();
+}
+function importBackup(e){
+  const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{state=Object.assign(defaultState(),JSON.parse(rd.result));state.counters=state.counters||{byYm:{},batch:{}};persist();renderAll();alert('読み込みました。');}catch(err){alert('読込に失敗しました：'+err.message);}};
+  rd.readAsText(f);
+}
+
+/* ============================================================
+   初期化
+   ============================================================ */
+function renderAll(){renderHome();renderResidents();renderCreate();renderHistory();fillSettingsForm();}
+function init(){
+  loadLocal();loadCfg();
+  fillSettingsForm();
+  if(github.owner&&github.token){pullNow();}else{setSync(false);}
+  go('home');
+  // モーダル背景クリックで閉じない（誤操作防止）
+}
+window.onload=init;
+</script>
+</body>
+</html>
