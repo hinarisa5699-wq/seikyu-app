@@ -1249,11 +1249,17 @@ function buildDoc(r,typeKey){
    番号採番
    ============================================================ */
 function ensureNumber(doc,persistIt){
-  const y=doc.issue.slice(0,4),mm=doc.issue.slice(5,7);const ym=y+mm;
-  const key=doc.residentId+'|'+ym;
-  let seq=state.counters.batch[key];
-  if(seq==null){seq=(state.counters.byYm[ym]||0)+1;if(persistIt){state.counters.byYm[ym]=seq;state.counters.batch[key]=seq;}}
-  return `${y}-${state.settings.company.code}-${mm}${pad2(seq)}-${doc.suffix}`;
+  const ymRaw=(doc.month||doc.issue.slice(0,7));
+  const ym=ymRaw.replace('-','');
+  const y=ym.slice(0,4),mm=ym.slice(4,6);
+  const code=state.settings.company.code;
+  const mk=(seq)=>`${y}-${code}-${mm}${pad2(seq)}-${doc.suffix}`;
+  const exists=(num)=>state.documents.some(d=>d.id!==doc.id&&d.number===num);
+  let seq=(state.counters.byYm[ym]||0)+1;
+  let num=mk(seq);
+  while(exists(num)){seq++;num=mk(seq);}
+  if(persistIt){state.counters.byYm[ym]=seq;}
+  return num;
 }
 
 /* ============================================================
