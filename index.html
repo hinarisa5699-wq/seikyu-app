@@ -644,6 +644,12 @@ function addMonths(d,m){const x=new Date(d);x.setMonth(x.getMonth()+m);return x;
 function endOfMonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0);}
 function fmtDate(d){if(!d)return'';return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';}
 function fmtWareki(d){if(!d)return'';try{return new Intl.DateTimeFormat('ja-JP-u-ca-japanese',{era:'long',year:'numeric',month:'long',day:'numeric'}).format(d);}catch(e){return fmtDate(d);}}
+function ymLabel(ym){ // '2026-07' → '令和8年7月分'
+  if(!ym||!/^\d{4}-\d{2}/.test(ym))return'';
+  const d=parseD(ym.slice(0,7)+'-01');if(!d)return'';
+  try{return new Intl.DateTimeFormat('ja-JP-u-ca-japanese',{era:'long',year:'numeric',month:'long'}).format(d)+'分';}
+  catch(e){return ym.slice(0,4)+'年'+(+ym.slice(5,7))+'月分';}
+}
 function uid(){return 'r'+Math.random().toString(36).slice(2,9);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
@@ -1395,6 +1401,7 @@ function docHTML(d){
     }).join('');
     inner=`
       <div class="dtitle">${esc(d.docTitle)}</div>
+      ${(['seikyu_yachin','honnin','engo','gaibu_meal'].includes(d.typeKey)&&d.month)?`<div style="text-align:center;font-size:15px;font-weight:700;letter-spacing:2px;margin:2px 0 8px">${esc(ymLabel(d.month))}</div>`:''}
       ${header}
       ${d.lead?`<div class="lead">${esc(d.lead)}</div>`:''}
       <div class="bigsum"><span>${d.docTitle.includes('見積')?'お見積金額（税込）':'ご請求金額（税込）'}</span><span class="n">${yen(d.total)}</span></div>
