@@ -1330,6 +1330,12 @@ function collectDocForm(){
   else updateTotal();
 }
 function saveAndPreview(){
+  // 宛名ちがい防止：開いている書類の入居者と、作成画面で選んでいる入居者が違うと警告
+  const _selId=$('createResident')?$('createResident').value:'';
+  if(_selId&&currentDoc&&currentDoc.residentId&&_selId!==currentDoc.residentId){
+    const _selName=(state.residents.find(x=>x.id===_selId)||{}).name||'選択中の入居者';
+    if(!confirm('⚠ この書類は「'+currentDoc.residentName+'」様あてです。\n作成画面で選んでいる「'+_selName+'」様とは違います。\n\nこのまま「'+currentDoc.residentName+'」様の書類として保存しますか？\n\n※「'+_selName+'」様の書類を作りたい場合は「キャンセル」→「閉じる」で一度閉じ、'+_selName+'様を選んで書類ボタンを押してください。')){return;}
+  }
   collectDocForm();
   // 入力した入居日を入居者に記憶（次回から自動表示・毎回の入力不要に）
   const _res=state.residents.find(x=>x.id===currentDoc.residentId);
@@ -1654,7 +1660,7 @@ function scheduleHTML(){
 function renderSchedulePreview(){$('sc_preview').innerHTML=scheduleHTML();}
 function printSchedule(){$('printArea').innerHTML=scheduleHTML();window.print();}
 function viewDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;$('view_preview').innerHTML=docHTML(d);openModal('viewModal');window._printDoc=d;}
-function reopenDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;currentDoc=JSON.parse(JSON.stringify(d));fillDocForm();openModal('docModal');renderDocPreview();}
+function reopenDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;currentDoc=JSON.parse(JSON.stringify(d));if($('createResident'))$('createResident').value=d.residentId||'';fillDocForm();openModal('docModal');renderDocPreview();}
 function delDoc(id){if(!confirm('この書類を削除しますか？'))return;
   const doc=state.documents.find(x=>x.id===id);
   // 充当していた仮押さえがあれば「未充当」に戻す（再度充当できるように）
@@ -1670,7 +1676,7 @@ function makeReceipt(id){
   d.tadashi=engo?('住宅使用料（家賃分）として（'+src.number+'）'):(src.typeLabel+'（'+src.number+'）の代金として');
   d.showBank=false;d.lead='';d.notes=['上記正に領収いたしました。'];
   d.issue=todayStr();d.number=ensureNumber(d,false);
-  currentDoc=d;fillDocForm();openModal('docModal');renderDocPreview();
+  currentDoc=d;if($('createResident'))$('createResident').value=d.residentId||'';fillDocForm();openModal('docModal');renderDocPreview();
 }
 
 /* ============================================================
