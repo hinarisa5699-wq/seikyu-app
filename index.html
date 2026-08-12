@@ -1455,7 +1455,7 @@ function renderHistory(){
   if(q)docs=docs.filter(d=>(d.residentName+d.number+d.typeLabel).includes(q));
   const tb=$('historyTable').querySelector('tbody');
   tb.innerHTML=docs.map(d=>{
-    const canSend=isSeikyuDoc(d);
+    const canSend=true;
     const sendCell=!canSend?'<span class="muted">—</span>'
       :(d.sent?`<span class="badge normal">発送済</span><div class="muted" style="font-size:11px">${esc(d.sentDate||'')}</div><button class="btn sec sm" onclick="unsendDoc('${d.id}')">取消</button>`
               :`<button class="btn sm" onclick="sendDoc('${d.id}')">発送</button>`);
@@ -1471,7 +1471,7 @@ function renderHistory(){
   $('historyEmpty').style.display=docs.length?'none':'';
   $('historyTable').style.display=docs.length?'':'none';
 }
-function sendDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;d.sent=true;d.sentDate=todayStr();persist();renderHistory();alert('発送済みにしました。「入金確認」タブで入金を管理できます。');}
+function sendDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;d.sent=true;d.sentDate=todayStr();persist();renderHistory();alert(isSeikyuDoc(d)?'発送済みにしました。「入金確認」タブで入金を管理できます。':'発送済みにしました。');}
 function unsendDoc(id){const d=state.documents.find(x=>x.id===id);if(!d)return;d.sent=false;d.sentDate='';persist();renderHistory();}
 /* ============================================================
    入金確認
