@@ -583,6 +583,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     <label class="flexwrap" style="margin-top:10px"><input type="checkbox" id="dm_showBank" style="width:auto" onchange="renderDocPreview()"> 振込先を表示する</label>
     <div class="modal-actions">
       <button class="btn" onclick="saveAndPreview()">保存してプレビュー</button>
+      <button class="btn" onclick="saveAndPrint()">🖨 保存して印刷 / PDF</button>
       <button class="btn sec" onclick="renderDocPreview()">プレビュー更新</button>
       <button class="btn sec" onclick="closeModal('docModal')">閉じる</button>
     </div>
@@ -1329,14 +1330,21 @@ function collectDocForm(){
   if(d.typeKey==='ryoshu'||d.typeKey==='ryoshu_engo'){d.tadashi=$('dm_tadashi').value;d.receiptAmt=+$('dm_receiptAmt').value||0;d.total=d.receiptAmt;}
   else updateTotal();
 }
-function saveAndPreview(){
+function saveAndPreview(silent){
   // 宛名ちがい防止：開いている書類の入居者と、作成画面で選んでいる入居者が違うと警告
   const _selId=$('createResident')?$('createResident').value:'';
   if(_selId&&currentDoc&&currentDoc.residentId&&_selId!==currentDoc.residentId){
     const _selName=(state.residents.find(x=>x.id===_selId)||{}).name||'選択中の入居者';
-    if(!confirm('⚠ この書類は「'+currentDoc.residentName+'」様あてです。\n作成画面で選んでいる「'+_selName+'」様とは違います。\n\nこのまま「'+currentDoc.residentName+'」様の書類として保存しますか？\n\n※「'+_selName+'」様の書類を作りたい場合は「キャンセル」→「閉じる」で一度閉じ、'+_selName+'様を選んで書類ボタンを押してください。')){return;}
+    if(!confirm('⚠ この書類は「'+currentDoc.residentName+'」様あてです。\n作成画面で選んでいる「'+_selName+'」様とは違います。\n\nこのまま「'+currentDoc.residentName+'」様の書類として保存しますか？\n\n※「'+_selName+'」様の書類を作りたい場合は「キャンセル」→「閉じる」で一度閉じ、'+_selName+'様を選んで書類ボタンを押してください。')){return false;}
   }
   collectDocForm();
+  // 重複防止：同じ入居者・同じ月・同じ種類が既にある場合は確認（何度も保存して増えるのを防ぐ）
+  const _isNew=state.documents.findIndex(x=>x.id===currentDoc.id)<0;
+  if(_isNew){
+    const _ym=currentDoc.month||(currentDoc.issue||'').slice(0,7);
+    const _dup=state.documents.find(x=>x.residentId===currentDoc.residentId&&x.typeKey===currentDoc.typeKey&&(x.month||(x.issue||'').slice(0,7))===_ym);
+    if(_dup&&!confirm('⚠ '+currentDoc.residentName+'様の「'+currentDoc.typeLabel+'」は、同じ月（'+_ym+'）に既に作成済みです（番号 '+_dup.number+'）。\n\n新しくもう1件つくりますか？\n※同じものを印刷したいだけなら「キャンセル」を押し、この画面の「🖨 保存して印刷」ボタン、または履歴で番号 '+_dup.number+' の「表示/印刷」を使ってください。')){return false;}
+  }
   // 入力した入居日を入居者に記憶（次回から自動表示・毎回の入力不要に）
   const _res=state.residents.find(x=>x.id===currentDoc.residentId);
   if(_res){const _mv=($('createMoveIn').value||'').trim();if(_mv&&_res.movein!==_mv)_res.movein=_mv;}
@@ -1354,7 +1362,13 @@ function saveAndPreview(){
     kmsg='\n（お支払済みの仮押さえ前金を充当し、充当済みにしました）';
   }
   persist();renderDocPreview();
-  alert('保存しました。履歴からいつでも再印刷できます。'+kmsg);
+  if(!silent)alert('保存しました（番号 '+currentDoc.number+'）。\nこの画面の「🖨 保存して印刷」ボタン、または履歴でこの番号の「表示/印刷」から印刷できます。'+kmsg);
+  return true;
+}
+function saveAndPrint(){
+  if(saveAndPreview(true)===false)return; // 保存がキャンセルされたら印刷しない
+  window._printDoc=currentDoc;
+  doPrint();
 }
 
 /* ============================================================
