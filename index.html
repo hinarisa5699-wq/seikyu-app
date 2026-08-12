@@ -830,7 +830,7 @@ function onCreateResidentChange(){
   const r=state.residents.find(x=>x.id===$('createResident').value);
   const info=$('createResidentInfo');const grid=$('docTypeGrid');
   if(!r){info.textContent='';grid.innerHTML='<div class="muted">先に入居者を選択してください。</div>';return;}
-  if(r.movein&&!$('createMoveIn').value)$('createMoveIn').value=r.movein;
+  $('createMoveIn').value=r.movein||'';
   info.innerHTML=r.otameshi
     ? `<span class="badge" style="background:#fde8ef;color:#b3305e">お試し入居</span> 請求先:${esc(r.billto||'—')}／お試し請求書＋予定表が作れます`
     : (r.external
@@ -1331,6 +1331,9 @@ function collectDocForm(){
 }
 function saveAndPreview(){
   collectDocForm();
+  // 入力した入居日を入居者に記憶（次回から自動表示・毎回の入力不要に）
+  const _res=state.residents.find(x=>x.id===currentDoc.residentId);
+  if(_res){const _mv=($('createMoveIn').value||'').trim();if(_mv&&_res.movein!==_mv)_res.movein=_mv;}
   // 採番を確定
   currentDoc.number=$('dm_number').value||ensureNumber(currentDoc,true);
   if(!$('dm_number').value){$('dm_number').value=currentDoc.number;}
