@@ -284,7 +284,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     </div>
     <div class="card">
       <table class="data" id="historyTable">
-        <thead><tr><th>該当月</th><th>種類</th><th>番号</th><th>対象者</th><th>金額</th><th>発送</th><th>操作</th></tr></thead>
+        <thead><tr><th>保存日時</th><th>該当月</th><th>種類</th><th>番号</th><th>対象者</th><th>金額</th><th>発送</th><th>操作</th></tr></thead>
         <tbody></tbody>
       </table>
       <div id="historyEmpty" class="empty">まだ書類がありません。</div>
@@ -636,6 +636,7 @@ const $=id=>document.getElementById(id);
 const yen=n=>'¥'+Math.round(n||0).toLocaleString('ja-JP');
 const num=n=>Math.round(n||0).toLocaleString('ja-JP');
 function todayStr(){const d=new Date();return d.toISOString().slice(0,10);}
+function nowStamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
 function pad2(n){return String(n).padStart(2,'0');}
 function parseD(s){if(!s)return null;const d=new Date(s+'T00:00:00');return isNaN(d)?null:d;}
 function daysInMonth(d){return new Date(d.getFullYear(),d.getMonth()+1,0).getDate();}
@@ -1030,6 +1031,7 @@ function batchCreateForMonth(ym){
     if(state.documents.some(d=>d.residentId===r.id && d.month===ym && d.typeKey===typeKey)){skipped++;return;}
     const doc=buildDoc(r,typeKey);
     doc.number=ensureNumber(doc,true);
+    doc.savedAt=nowStamp();
     state.documents.push(JSON.parse(JSON.stringify(doc)));
     created++; madeList.push(r.name+'（'+yen(doc.total)+'）');
   });
@@ -1352,6 +1354,7 @@ function saveAndPreview(silent){
   currentDoc.number=$('dm_number').value||ensureNumber(currentDoc,true);
   if(!$('dm_number').value){$('dm_number').value=currentDoc.number;}
   else{ensureNumber(currentDoc,true);} // consume seq for batch consistency
+  currentDoc.savedAt=nowStamp(); // 保存日時（新しい順の並べ替え用）
   const i=state.documents.findIndex(x=>x.id===currentDoc.id);
   if(i>=0)state.documents[i]=JSON.parse(JSON.stringify(currentDoc));
   else state.documents.push(JSON.parse(JSON.stringify(currentDoc)));
@@ -1472,7 +1475,12 @@ function renderHistory(){
   fillMonthSelect('historyMonth',state.documents);
   fillResidentSelect('historyResident');
   const mSel=$('historyMonth').value, rSel=$('historyResident').value;
-  let docs=[...state.documents].sort((a,b)=>docYm(b).localeCompare(docYm(a))||(b.number||'').localeCompare(a.number||''));
+  // 新しく保存したもの順（保存日時の新しい順）。保存日時が無い既存書類は該当月・番号順で下に。
+  let docs=[...state.documents].sort((a,b)=>{
+    const sa=a.savedAt||'',sb=b.savedAt||'';
+    if(sa||sb){if(sb!==sa)return sb.localeCompare(sa);}
+    return docYm(b).localeCompare(docYm(a))||(b.number||'').localeCompare(a.number||'');
+  });
   if(mSel)docs=docs.filter(d=>docYm(d)===mSel);
   if(rSel)docs=docs.filter(d=>d.residentId===rSel);
   if(q)docs=docs.filter(d=>(d.residentName+d.number+d.typeLabel).includes(q));
@@ -1483,6 +1491,7 @@ function renderHistory(){
       :(d.sent?`<span class="badge normal">発送済</span><div class="muted" style="font-size:11px">${esc(d.sentDate||'')}</div><button class="btn sec sm" onclick="unsendDoc('${d.id}')">取消</button>`
               :`<button class="btn sm" onclick="sendDoc('${d.id}')">発送</button>`);
     return `<tr>
+    <td class="muted" style="font-size:12px;white-space:nowrap">${esc(d.savedAt||'—')}</td>
     <td>${esc(docYm(d))}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
     <td>${esc(d.residentName)}</td><td>${yen(d.total)}</td>
     <td>${sendCell}</td>
