@@ -241,10 +241,10 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <div class="grid2">
         <div>
           <div id="mc_drop" ondragover="mealDragOver(event)" ondragenter="mealDragOver(event)" ondragleave="mealDragLeave(event)" ondrop="mealDrop(event)" onclick="document.getElementById('mc_file').click()">
-            <div class="big">📥 ここにCSVファイルをドラッグ＆ドロップ</div>
-            <div class="muted">またはクリックしてファイルを選択</div>
+            <div class="big">📥 ここに食事CSV／デイPDFをドラッグ＆ドロップ</div>
+            <div class="muted">またはクリックしてファイルを選択（CSV＝食事集計／PDF＝デイサービス利用明細から通所日を自動読取）</div>
           </div>
-          <input type="file" id="mc_file" accept=".csv,text/csv" style="display:none" onchange="mealCsvFile(event)">
+          <input type="file" id="mc_file" accept=".csv,text/csv,.pdf,application/pdf" style="display:none" onchange="mealCsvFile(event)">
         </div>
         <div>
           <label>対象月（自動判定・必要なら修正）</label>
@@ -286,6 +286,17 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <div id="dc_cal" style="margin-top:12px"><div class="muted">入居者と対象月を選んでください。</div></div>
       <div class="row-actions"><button class="btn sec" onclick="clearDaycare()">この月の通所日をクリア</button></div>
       <div class="hint">前払い（暫定）請求書は、生保の方の作成画面（②書類を選ぶ）に「前払い（暫定）請求書」ボタンが出ます。ここで登録した通所日のお昼・おやつが自動で差し引かれます。</div>
+    </div>
+
+    <div class="card" id="dc_pdfCard" style="display:none">
+      <h3>デイPDFの読み取り結果（<span id="dc_pdfYm"></span>）</h3>
+      <p class="muted" id="dc_pdfMsg"></p>
+      <div id="dc_pdfList"></div>
+      <div class="row-actions">
+        <button class="btn" onclick="applyPdfDaycare()">✅ この通所日をカレンダーに反映</button>
+        <button class="btn sec" onclick="document.getElementById('dc_pdfCard').style.display='none'">閉じる</button>
+      </div>
+      <div class="hint">照合できた入居者の通所日をカレンダーに反映します（未登録の氏名はスキップ）。反映後、その月の請求書は通所日のお昼・おやつを自動で除いて計算します。</div>
     </div>
   </section>
 
@@ -962,6 +973,7 @@ function readCsvBytesToText(buf){
 }
 function readMealFile(f){
   if(!f)return;
+  if(/\.pdf$/i.test(f.name||'')||f.type==='application/pdf'){handleDaycarePdf(f);return;}
   if(f.name&&!/\.csv$/i.test(f.name)&&f.type&&f.type.indexOf('csv')<0&&f.type!=='text/plain'&&f.type!==''){
     if(!confirm('CSVファイルではないようです（'+f.name+'）。このまま取り込みますか？'))return;
   }
@@ -1098,6 +1110,81 @@ function toggleDaycare(d){
   persist();renderDaycareCal();
 }
 function clearDaycare(){const rid=($('dc_resident')||{}).value, ym=($('dc_month')||{}).value;if(!rid||!ym)return;if(state.daycare&&state.daycare[ym])delete state.daycare[ym][rid];persist();renderDaycareCal();}
+/* ===== デイサービスPDFから通所介護日を読取 ===== */
+let _pdfDaycare=null;
+function loadPdfJs(){
+  if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=()=>{try{window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res(window.pdfjsLib);}catch(e){rej(e);}};
+    s.onerror=()=>rej(new Error('pdf.js の読み込みに失敗しました（ネット接続をご確認ください）'));
+    document.head.appendChild(s);
+  });
+}
+async function pdfToLines(buf){
+  const lib=await loadPdfJs();
+  const pdf=await lib.getDocument({data:buf}).promise;
+  const pages=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);const tc=await page.getTextContent();
+    const rows={};
+    tc.items.forEach(it=>{const y=Math.round(it.transform[5]);const x=it.transform[4];(rows[y]=rows[y]||[]).push({x,s:it.str});});
+    const ys=Object.keys(rows).map(Number).sort((a,b)=>b-a);
+    ys.forEach(y=>{const line=rows[y].sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ').replace(/\s+/g,' ').trim();if(line)pages.push(line);});
+  }
+  return pages;
+}
+function parseDaycareFromLines(lines){
+  let ym=null;
+  // サービス月「令和X年Y月分」を優先（請求年月と区別）
+  lines.forEach(l=>{const m=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*分/);if(m&&!ym){ym=(2018+parseInt(m[1],10))+'-'+pad2(parseInt(m[2],10));}});
+  if(!ym)lines.forEach(l=>{const m=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月/);if(m&&!ym){ym=(2018+parseInt(m[1],10))+'-'+pad2(parseInt(m[2],10));}});
+  const norm=s=>String(s||'').replace(/[\s　]/g,'');
+  const resList=state.residents.map(r=>({r,nn:norm(r.name)})).filter(x=>x.nn);
+  const found={}; let current=null;
+  lines.forEach(l=>{
+    const ln=norm(l);
+    resList.forEach(x=>{ if(ln.indexOf(x.nn+'様')>=0) current=x.r; });
+    if(current && l.indexOf('地域通所介護')>=0){
+      const dm=l.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+      if(dm){const day=parseInt(dm[2],10);if(day>=1&&day<=31){(found[current.id]=found[current.id]||new Set()).add(day);}}
+    }
+  });
+  const per=Object.keys(found).map(rid=>({residentId:rid,name:(state.residents.find(r=>r.id===rid)||{}).name,days:Array.from(found[rid]).sort((a,b)=>a-b)}));
+  return {ym,per};
+}
+async function handleDaycarePdf(f){
+  const card=$('dc_pdfCard');
+  $('dc_pdfYm').textContent='読取中…';$('dc_pdfMsg').textContent='PDFを解析しています…';$('dc_pdfList').innerHTML='';card.style.display='';
+  try{
+    const buf=await f.arrayBuffer();
+    const lines=await pdfToLines(buf);
+    const res=parseDaycareFromLines(lines);
+    _pdfDaycare=res;
+    renderPdfDaycarePreview(res,f.name);
+  }catch(e){
+    $('dc_pdfYm').textContent='—';$('dc_pdfMsg').textContent='読取に失敗しました：'+(e&&e.message||e);$('dc_pdfList').innerHTML='';
+  }
+}
+function renderPdfDaycarePreview(res,fname){
+  $('dc_pdfYm').textContent=res.ym||'月が読めませんでした';
+  if(!res.per.length){$('dc_pdfMsg').textContent='通所介護の日付を持つ登録入居者が見つかりませんでした（'+esc(fname||'')+'）。氏名が登録と一致しているかご確認ください。';$('dc_pdfList').innerHTML='';return;}
+  $('dc_pdfMsg').innerHTML='<b>'+esc(fname||'')+'</b> から '+res.per.length+' 名の通所介護日を読み取りました。内容を確認して反映してください。';
+  $('dc_pdfList').innerHTML='<table class="data"><thead><tr><th>入居者</th><th>通所日数</th><th>通所日</th></tr></thead><tbody>'+
+    res.per.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.days.length}日</td><td>${p.days.join('・')}</td></tr>`).join('')+'</tbody></table>';
+}
+function applyPdfDaycare(){
+  if(!_pdfDaycare||!_pdfDaycare.ym){alert('反映できるデータがありません。月が読み取れませんでした。');return;}
+  const ym=_pdfDaycare.ym;
+  state.daycare=state.daycare||{};state.daycare[ym]=state.daycare[ym]||{};
+  _pdfDaycare.per.forEach(p=>{state.daycare[ym][p.residentId]=p.days.slice();});
+  persist();
+  if($('dc_month'))$('dc_month').value=ym;
+  fillDaycareResident();renderDaycareCal();
+  alert(ym+' の通所日を '+_pdfDaycare.per.length+' 名分、カレンダーに反映しました。');
+  $('dc_pdfCard').style.display='none';
+}
 // 食事CSVの喫食データから通所日のお昼・おやつを除く
 function adjustMealByDaycare(p,dcDays){
   if(!p||!dcDays||!dcDays.length)return p;
