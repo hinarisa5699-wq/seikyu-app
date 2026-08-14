@@ -1750,11 +1750,12 @@ function renderHistory(){
   fillMonthSelect('historyMonth',state.documents);
   fillResidentSelect('historyResident');
   const mSel=$('historyMonth').value, rSel=$('historyResident').value;
-  // 新しく保存したもの順（保存日時の新しい順）。保存日時が無い既存書類は該当月・番号順で下に。
+  // 作成日時順（新しいものが上）。保存日時が無い書類は発行日を作成日として使う。
+  const sortKey=d=>d.savedAt||((d.issue||d.month||'')+' 00:00');
   let docs=[...state.documents].sort((a,b)=>{
-    const sa=a.savedAt||'',sb=b.savedAt||'';
-    if(sa||sb){if(sb!==sa)return sb.localeCompare(sa);}
-    return docYm(b).localeCompare(docYm(a))||(b.number||'').localeCompare(a.number||'');
+    const ka=sortKey(a),kb=sortKey(b);
+    if(kb!==ka)return kb.localeCompare(ka);
+    return (b.number||'').localeCompare(a.number||'');
   });
   if(mSel)docs=docs.filter(d=>docYm(d)===mSel);
   if(rSel)docs=docs.filter(d=>d.residentId===rSel);
@@ -1766,7 +1767,7 @@ function renderHistory(){
       :(d.sent?`<span class="badge normal">発送済</span><div class="muted" style="font-size:11px">${esc(d.sentDate||'')}</div><button class="btn sec sm" onclick="unsendDoc('${d.id}')">取消</button>`
               :`<button class="btn sm" onclick="sendDoc('${d.id}')">発送</button>`);
     return `<tr>
-    <td class="muted" style="font-size:12px;white-space:nowrap">${esc(d.savedAt||'—')}</td>
+    <td class="muted" style="font-size:12px;white-space:nowrap">${esc(d.savedAt||(d.issue?d.issue+'（作成）':'—'))}</td>
     <td>${esc(docYm(d))}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
     <td>${esc(d.residentName)}</td><td>${yen(d.total)}</td>
     <td>${sendCell}</td>
