@@ -303,6 +303,23 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <p class="muted">保存済みの月ごとに、一致する入居者全員分の請求書をまとめて作成します（区分に応じて自動：生保＝ご本人あて／通常＝家賃時。通所日のお昼・おやつは自動で除外）。</p>
       <div id="mc_saved" class="muted">まだ取り込まれた月はありません。</div>
     </div>
+
+    <div class="card">
+      <h3>⑤ 差額精算（前払いの清算）</h3>
+      <p class="muted">前払い（暫定）で請求した月について、<b>実績（CSV・通所日反映後）の請求総額</b>と<b>前払い暫定の請求総額</b>の差を出します。差額は<b>翌月のご本人あて請求書</b>に「差額精算金」として1行入れられます。</p>
+      <div class="grid2">
+        <div><label>入居者</label><select id="se_resident"><option value="">— 選択 —</option></select></div>
+        <div><label>精算する月（前払いした月）</label><input type="month" id="se_month"></div>
+      </div>
+      <div class="row-actions">
+        <button class="btn" onclick="se_calc()">差額を計算する</button>
+      </div>
+      <div id="se_result" class="muted" style="margin-top:8px"></div>
+      <div class="row-actions" id="se_applyRow" style="display:none">
+        <button class="btn" onclick="se_apply()">翌月のご本人あて請求書に「差額精算金」を入れて作成</button>
+      </div>
+      <div class="hint">実績は、保存済みの「ご本人あて請求書」があればその総額、なければCSV・通所日から試算します。差額＝実績−前払い（プラス＝不足の追加請求／マイナス＝払い過ぎの減額）。金額は作成画面で確認・修正できます。</div>
+    </div>
   </section>
 
   <!-- HISTORY -->
@@ -1099,6 +1116,7 @@ function renderMealCsv(){
   if(!_pdfDaycare&&state._pdfPreview)_pdfDaycare=state._pdfPreview;
   if(_pdfDaycare&&_pdfDaycare.ym){$('dc_pdfCard').style.display='';renderPdfDaycarePreview(_pdfDaycare,_pdfDaycare._fname||'');if($('dc_month')&&!$('dc_month').value)$('dc_month').value=_pdfDaycare.ym;}
   renderDaycareCal();
+  fillSettleResident();
 }
 /* ===== デイサービス利用日カレンダー ===== */
 function getDaycareDays(rid,ym){return (state.daycare&&state.daycare[ym]&&state.daycare[ym][rid])?state.daycare[ym][rid].slice():[];}
@@ -1206,6 +1224,44 @@ function applyPdfDaycare(){
   fillDaycareResident();renderDaycareCal();
   alert(ym+' の通所日を '+cnt+' 名分、カレンダーに反映しました。');
   $('dc_pdfCard').style.display='none';
+}
+// ===== 差額精算（前払いの清算） =====
+function addMonthStr(ym,n){let y=+ym.slice(0,4),m=+ym.slice(5,7)+n;while(m>12){m-=12;y++;}while(m<1){m+=12;y--;}return y+'-'+pad2(m);}
+function fillSettleResident(){const sel=$('se_resident');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.filter(r=>!r.external&&!r.otameshi).map(r=>`<option value="${r.id}">${esc(r.name)}（${esc(r.kubun)}${r.room?'・'+esc(r.room):''}）</option>`).join('');sel.value=cur;}
+function se_calc(){
+  const rid=($('se_resident')||{}).value, ym=($('se_month')||{}).value;
+  if(!rid||!ym){alert('入居者と精算する月を選んでください。');return;}
+  const r=state.residents.find(x=>x.id===rid);
+  const zList=state.documents.filter(d=>d.residentId===rid&&d.typeKey==='zantei'&&d.month===ym).sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
+  if(!zList.length){$('se_result').innerHTML='<span style="color:#b3305e">この月（'+esc(ym)+'）の前払い（暫定）請求書が見つかりません。先に暫定請求書を作成・保存してください。</span>';$('se_applyRow').style.display='none';return;}
+  const zantei=zList[0];
+  let actualTotal, actualNote;
+  const aList=state.documents.filter(d=>d.residentId===rid&&d.typeKey==='honnin'&&d.month===ym).sort((a,b)=>(b.savedAt||'').localeCompare(a.savedAt||''));
+  if(aList.length){actualTotal=aList[0].total;actualNote='保存済みのご本人あて請求書（'+aList[0].number+'）の総額';}
+  else{
+    const pm=($('createMonth')||{}).value, pr=($('createResident')||{}).value;
+    if($('createMonth'))$('createMonth').value=ym; if($('createResident'))$('createResident').value=rid;
+    const tmp=buildDoc(r,'honnin'); actualTotal=tmp.total; actualNote='CSV・通所日から試算（保存済みが無いため）';
+    if($('createMonth'))$('createMonth').value=pm; if($('createResident'))$('createResident').value=pr;
+  }
+  const diff=actualTotal-zantei.total;
+  window._settle={rid,ym,prepaid:zantei.total,actual:actualTotal,diff,zNum:zantei.number};
+  $('se_result').innerHTML='前払い（暫定）総額：<b>'+yen(zantei.total)+'</b>（'+esc(zantei.number)+'）<br>実績の総額：<b>'+yen(actualTotal)+'</b>（'+esc(actualNote)+'）<br>差額精算金 ＝ 実績 − 前払い ＝ <b style="font-size:18px;color:'+(diff>=0?'#0b7':'#b3305e')+'">'+(diff>=0?'＋':'')+yen(diff)+'</b>　'+(diff>=0?'（不足分を翌月に追加請求）':'（払い過ぎ分を翌月で減額）');
+  $('se_applyRow').style.display=(diff!==0?'':'none');
+}
+function se_apply(){
+  if(!window._settle){alert('先に「差額を計算する」を押してください。');return;}
+  const s=window._settle; const r=state.residents.find(x=>x.id===s.rid); if(!r)return;
+  const nextYm=addMonthStr(s.ym,1);
+  const pm=($('createMonth')||{}).value, pr=($('createResident')||{}).value;
+  if($('createMonth'))$('createMonth').value=nextYm; if($('createResident'))$('createResident').value=s.rid;
+  currentDoc=buildDoc(r,'honnin');
+  currentDoc.number=ensureNumber(currentDoc,false);
+  currentDoc.items.push({name:'差額精算金',tanka:'－',qty:'－',kijun:'－',amount:s.diff,tekiyo:'前払い（暫定・'+ymLabel(s.ym)+'／'+s.zNum+'）との差額精算：実績'+yen(s.actual)+'−前払い'+yen(s.prepaid),inc:true});
+  currentDoc.total=currentDoc.items.filter(x=>x.inc).reduce((a,b)=>a+(+b.amount||0),0);
+  if($('createMonth'))$('createMonth').value=pm; if($('createResident'))$('createResident').value=pr;
+  fillDocForm();openModal('docModal');renderDocPreview();
+  alert(nextYm+' のご本人あて請求書に「差額精算金 '+(s.diff>=0?'＋':'')+yen(s.diff)+'」を入れました。内容を確認して保存してください。');
 }
 // 食事CSVの喫食データから通所日のお昼・おやつを除く
 function adjustMealByDaycare(p,dcDays){
