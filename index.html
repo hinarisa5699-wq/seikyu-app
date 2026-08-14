@@ -1295,7 +1295,7 @@ function fmtDays(arr){
 }
 function importMealLines(p,label){
   const rows=[];const lab=label?`（${label}）`:'';
-  const add=(nm,cnt,amt,kij,days)=>{if((+cnt)>0||(+amt)>0){const unit=cnt>0?Math.round(amt/cnt):(nm==='配膳下膳'?150:amt);const dt=fmtDays(days);rows.push({name:nm+lab,tanka:unit,qty:cnt,kijun:kij,amount:+amt||0,tekiyo:(dt?dt:'喫食実績')+'（CSV）',inc:true});}};
+  const add=(nm,cnt,amt,kij,days)=>{if((+cnt)>0||(+amt)>0){const unit=cnt>0?Math.round(amt/cnt):(nm==='配膳下膳'?150:amt);const dt=fmtDays(days);rows.push({name:nm+lab,tanka:unit,qty:cnt,kijun:kij,amount:+amt||0,tekiyo:(dt?dt:'喫食実績'),inc:true});}};
   add('朝食',p.asaCount,p.asaAmt,'食',p.asaDays);
   add('昼食',p.hiruCount,p.hiruAmt,'食',p.hiruDays);
   add('夕食',p.yoruCount,p.yoruAmt,'食',p.yoruDays);
@@ -1359,11 +1359,11 @@ function buildDoc(r,typeKey){
 
   if(typeKey==='mitsumori'){ // 通常・初回見積
     lead='下記のとおりお見積り申し上げます。';
-    items=[rentLine(daysMove),kyoLine(daysMove),...mealLines(r,daysMove),supLine(daysMove),kounetsuLine(r,'mitsumori'),nyuLine(),kasaiLine()];
+    items=[rentLine(daysMove),kyoLine(daysMove),supLine(daysMove),...mealLines(r,daysMove),kounetsuLine(r,'mitsumori'),nyuLine(),kasaiLine()];
     dueLabel='お振込期限';due=move?addMonths(move,1):endOfMonth(issue);
     notes=['入居月分（家賃・共益費・食費・生活支援サービス費）は「月額÷当月日数（'+dim+'日）×利用日数」で日割り（円未満切捨）。翌月以降は満額です。',
       '家賃・火災保険料・入居金は消費税非課税。食費・生活支援サービス費・光熱費は課税。',
-      '食費は各食の単価×回数で試算しています（実際のご請求は喫食実績＝食事CSVに基づく実額になります）。',
+      '食費は各食の単価×回数で試算しています（実際のご請求は喫食実績に基づく実額になります）。',
       '光熱費は実費とし別途精算します。','本見積書の有効期限は発行日より1ヶ月です。'];
   }else if(typeKey==='mitsumori_s'){ // 生保・1ヶ月フル予測（援護課提出用）
     const yosoku=+p.yosoku||30;
@@ -1397,11 +1397,11 @@ function buildDoc(r,typeKey){
     const mealItems=mImp?importMealLines(mImp):mealLines(r,mealDays);
     const housing=partial?[rentLine(daysMove),kyoLine(daysMove)]:[rentFull(),kyoFull()];
     const supItem=partial?supLine(daysMove):supFull();
-    items=[...housing,...mealItems,supItem,kounetsuLine(r,'seikyu_yachin')];
+    items=[...housing,supItem,...mealItems,kounetsuLine(r,'seikyu_yachin')];
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
     notes=[(partial?'入居月分（日割り）と食費です。':'当月分（1ヶ月満額）の家賃・共益費・生活支援サービス費と食費です。'),
       '日割りは「月額÷当月日数（'+dim+'日）×利用日数」で計算（円未満切捨）。まるまる1ヶ月は満額です。','家賃・共益費は非課税、食費・生活支援サービス費は課税。',
-      (mImp?'食費は '+monthStr+' の喫食実績（食事CSV取込）に基づく実額です。':'食費は朝食（食事＋配膳）・昼・夕・おやつの単価×回数です。'),
+      (mImp?'食費は '+monthStr+' の喫食実績に基づく実額です。':'食費は朝食（食事＋配膳）・昼・夕・おやつの単価×回数です。'),
       '光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。個人契約の方は請求対象外。'];
   }else if(typeKey==='karioosae'){ // 仮押さえ
     lead='下記のとおり、ご入居の仮押さえ前金をご請求申し上げます。【請求区分：仮押さえ前金（家賃1ヶ月分）】';
@@ -1427,13 +1427,13 @@ function buildDoc(r,typeKey){
     let mImpH=getMealImport(r.name,monthStr);
     if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDaycareDays(r.id,monthStr));
     const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays);
-    items=[...mealItemsH, partial?supLine(daysMove):supFull()];
+    items=[partial?supLine(daysMove):supFull(), ...mealItemsH];
     if(kyo>0)items.unshift(partial?kyoLine(daysMove):kyoFull());
     items.push(kounetsuLine(r,'honnin'));
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
     notes=['本請求は家賃以外（食費・生活支援サービス費・光熱費等）です。家賃分は援護課あてに別途ご請求します。',
       '食費・生活支援サービス費は課税。',
-      (mImpH?'食費は '+monthStr+' の喫食実績（食事CSV取込）に基づく実額です。':'食費は朝食（食事＋配膳）・昼・夕・おやつの単価×回数です。'),
+      (mImpH?'食費は '+monthStr+' の喫食実績に基づく実額です。':'食費は朝食（食事＋配膳）・昼・夕・おやつの単価×回数です。'),
       '光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。個人契約の方は請求対象外。'];
   }else if(typeKey==='zantei'){ // 生保・前払い（暫定）ご本人あて
     const dc=getDaycareDays(r.id,monthStr);
@@ -1442,16 +1442,16 @@ function buildDoc(r,typeKey){
     lead='下記のとおり、前払い（暫定）としてご請求申し上げます。【請求区分：'+(monthD?(monthD.getMonth()+1):'')+'月分 前払い（暫定）・家賃以外】';
     const cutNote='当月'+dim+'日−通所介護'+dc.length+'日＝'+eatDays+'日分（前払い暫定・課税）';
     items=[
+      supFull(),
       {name:'昼食',tanka:hiruU,qty:eatDays,kijun:'食',amount:hiruU*eatDays,tekiyo:cutNote,inc:true},
-      {name:'おやつ',tanka:oyaU,qty:eatDays,kijun:'食',amount:oyaU*eatDays,tekiyo:cutNote,inc:true},
-      supFull()
+      {name:'おやつ',tanka:oyaU,qty:eatDays,kijun:'食',amount:oyaU*eatDays,tekiyo:cutNote,inc:true}
     ];
     if(kyo>0)items.unshift(kyoFull());
     items.push(kounetsuLine(r,'honnin'));
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
     notes=['本請求は前払い（暫定）です。通所介護（デイサービス）ご利用日のお昼・おやつは、デイの請求に含まれるため除いています。',
-      '通所日は「食事CSV取込」画面の「デイサービス利用日」カレンダーの登録に基づきます（当月 '+dim+'日 のうち '+dc.length+'日 を通所として除外）。',
-      '実績が確定したら、食事CSV・デイ明細で差額を精算します（差額精算金として次回に反映）。',
+      '通所日は「データ取込作成」画面の「デイサービス利用日」カレンダーの登録に基づきます（当月 '+dim+'日 のうち '+dc.length+'日 を通所として除外）。',
+      '実績が確定したら、実績とデイ明細で差額を精算します（差額精算金として次回に反映）。',
       '食費・生活支援サービス費は課税。'];
   }else if(typeKey==='gaibu_meal'){ // 外部利用者・食事のみ
     lead='下記のとおりご請求申し上げます。【請求区分：食事代（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
@@ -1462,7 +1462,7 @@ function buildDoc(r,typeKey){
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
     notes=['本請求はデイサービスご利用時の食事代です（入居に伴う家賃・共益費等はありません）。',
       '食費は非課税。',
-      (mImpG?'食費は '+monthStr+' の喫食実績（食事CSV取込）に基づく実額です。':'食費は各食の単価×回数で計算しています。')];
+      (mImpG?'食費は '+monthStr+' の喫食実績に基づく実額です。':'食費は各食の単価×回数で計算しています。')];
   }else if(typeKey==='otameshi'){ // お試し入居（短期利用）
     const cd=daysInMonth(monthD||issue); // 当月実日数
     const days=3; // 利用日数（例：2泊3日）既定
