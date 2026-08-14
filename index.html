@@ -1018,14 +1018,14 @@ function mealDrop(e){
   readMealFile(f);
 }
 function mealCsvParsePaste(){const t=$('mc_paste').value;if(!t.trim()){alert('貼り付け欄が空です。');return;}processMealCsv(t);}
-function clearMealCsvInput(){$('mc_paste').value='';$('mc_file').value='';mcPreview=null;_pdfDaycare=null;state._impPreview=null;state._impMonth='';state._pdfPreview=null;persist();$('mc_resultCard').style.display='none';$('dc_pdfCard').style.display='none';}
+function clearMealCsvInput(){$('mc_paste').value='';$('mc_file').value='';mcPreview=null;_pdfDaycare=null;clearImportLS();$('mc_resultCard').style.display='none';$('dc_pdfCard').style.display='none';}
 function processMealCsv(text){
   const rows=parseCsvText(text);
   const res=aggregateMeals(rows);
   if(res.error){alert('取り込めませんでした：'+res.error);$('mc_resultCard').style.display='none';return;}
   mcPreview=res;
   if(res.ym)$('mc_month').value=res.ym;
-  state._impPreview=res;state._impMonth=$('mc_month').value||res.ym||'';persist(); // タブ切替・再読込でも消えないよう保存
+  saveImportLS(); // 端末に保存（タブ切替・再読込しても消えない）
   renderMcPreview();
 }
 function residentMatch(name){const k=nkey(name);return state.residents.find(r=>nkey(r.name)===k)||null;}
@@ -1057,7 +1057,7 @@ function saveMealImport(){
   const ym=$('mc_month').value||mcPreview.ym;
   if(!ym){alert('対象月を選んでください。');return;}
   state.mealData[ym]={importedAt:todayStr(),ym,people:JSON.parse(JSON.stringify(mcPreview.people))};
-  persist();
+  saveLocal();if(github.connected){pushNow();} // すぐクラウド保存（再読込しても消えない）
   alert('保存しました。'+ym+' の請求書・見積書で、この食事代が自動で反映されます。');
   renderSavedMeals();
 }
@@ -1106,14 +1106,16 @@ function batchCreateForMonth(ym){
   alert(created+' 件の請求書を作成しました'+(skipped?'（'+skipped+' 件は作成済みのためスキップ）':'')+'。\n\n'+madeList.join('\n')+'\n\n「履歴」タブでご確認ください。');
   renderSavedMeals();
 }
+// 取込内容は端末専用の保存領域に置く（クラウド読込で上書きされない＝再読込しても消えない）
+function saveImportLS(){try{localStorage.setItem('seikyu_import_v1',JSON.stringify({imp:mcPreview,pdf:_pdfDaycare,month:($('mc_month')||{}).value||''}));}catch(e){}}
+function loadImportLS(){try{const s=localStorage.getItem('seikyu_import_v1');if(s)return JSON.parse(s);}catch(e){}return null;}
+function clearImportLS(){try{localStorage.removeItem('seikyu_import_v1');}catch(e){}}
 function renderMealCsv(){
   renderSavedMeals();
-  // 取込内容を復元（タブ切替・再読込しても消えない）
-  if(!mcPreview&&state._impPreview)mcPreview=state._impPreview;
-  if(state._impMonth&&$('mc_month')&&!$('mc_month').value)$('mc_month').value=state._impMonth;
+  // 取込内容を復元（端末に保存済み。タブ切替・再読込しても消えない）
+  if(!mcPreview||!_pdfDaycare){const ls=loadImportLS();if(ls){if(!mcPreview&&ls.imp)mcPreview=ls.imp;if(!_pdfDaycare&&ls.pdf)_pdfDaycare=ls.pdf;if(ls.month&&$('mc_month')&&!$('mc_month').value)$('mc_month').value=ls.month;}}
   if(mcPreview)renderMcPreview();
   fillDaycareResident();
-  if(!_pdfDaycare&&state._pdfPreview)_pdfDaycare=state._pdfPreview;
   if(_pdfDaycare&&_pdfDaycare.ym){$('dc_pdfCard').style.display='';renderPdfDaycarePreview(_pdfDaycare,_pdfDaycare._fname||'');if($('dc_month')&&!$('dc_month').value)$('dc_month').value=_pdfDaycare.ym;}
   renderDaycareCal();
   fillSettleResident();
@@ -1199,7 +1201,7 @@ async function handleDaycarePdf(f){
     const res=parseDaycareFromLines(lines);
     res._fname=f.name;
     _pdfDaycare=res;
-    state._pdfPreview=res;persist(); // 消えないよう保存
+    saveImportLS(); // 端末に保存（再読込しても消えない）
     renderPdfDaycarePreview(res,f.name);
   }catch(e){
     $('dc_pdfYm').textContent='—';$('dc_pdfMsg').textContent='読取に失敗しました：'+(e&&e.message||e);$('dc_pdfList').innerHTML='';
@@ -1218,7 +1220,7 @@ function applyPdfDaycare(){
   state.daycare=state.daycare||{};state.daycare[ym]=state.daycare[ym]||{};
   _pdfDaycare.per.forEach(p=>{state.daycare[ym][p.residentId]=p.days.slice();});
   const cnt=_pdfDaycare.per.length;
-  _pdfDaycare=null;state._pdfPreview=null; // 反映済みなので取込結果はクリア（カレンダーに保存済み）
+  _pdfDaycare=null;saveImportLS(); // 反映済みなのでPDF結果はクリア（カレンダーに保存済み。CSVプレビューは残す）
   persist();
   if($('dc_month'))$('dc_month').value=ym;
   fillDaycareResident();renderDaycareCal();
