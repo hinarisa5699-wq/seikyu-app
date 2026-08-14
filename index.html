@@ -955,8 +955,11 @@ function aggregateMeals(rows){
     if(ci.haiA>=0)p.haizenAmt+=toInt(rw[ci.haiA]);
     if(ci.total>=0)p.total+=toInt(rw[ci.total]);
   }
-  const people=Object.values(map);
+  let people=Object.values(map);
   if(!people.length)return{error:'明細データ（日付つきの行）が見つかりませんでした。'};
+  // 「入居者」のみ抽出（職員・外部利用者は除外）。区分で入居者が判別できない場合は全件のまま。
+  const onlyRes=people.filter(p=>String(p.kubun||'').indexOf('入居')>=0);
+  if(onlyRes.length)people=onlyRes;
   // 月の判定（タイトル行の「YYYY年M月」→なければ最初の日付）
   let ym='';const title=rows.map(r=>r.join(',')).join('\n');
   const mt=title.match(/(\d{4})\s*年\s*(\d{1,2})\s*月/);
@@ -1012,7 +1015,7 @@ function renderMcPreview(){
   $('mc_ymLabel').textContent=ym||'—';
   const residents=p.people.filter(x=>x.kubun==='入居者');
   const matched=residents.filter(x=>residentMatch(x.name)).length;
-  $('mc_summary').innerHTML=`全 ${p.people.length} 名（内 入居者 ${residents.length} 名）を集計しました。入居者のうち <b>${matched}</b> 名が登録済み入居者と一致。総合計 <b>${yen(p.people.reduce((s,x)=>s+x.total,0))}</b>。`;
+  $('mc_summary').innerHTML=`入居者 <b>${p.people.length}</b> 名を集計しました（職員・外部利用者は除外）。うち <b>${matched}</b> 名が登録済み入居者と一致。総合計 <b>${yen(p.people.reduce((s,x)=>s+x.total,0))}</b>。`;
   // 入居者を上に、その他を下に
   const order=[...p.people].sort((a,b)=>(a.kubun==='入居者'?0:1)-(b.kubun==='入居者'?0:1));
   const tb=$('mc_table').querySelector('tbody');
