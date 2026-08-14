@@ -1982,10 +1982,23 @@ function makeReceipt(id){
 /* ============================================================
    印刷
    ============================================================ */
+function docFileName(d){
+  const ym=d.month||(d.issue||'').slice(0,7);
+  const ymTxt=ym?ymLabel(ym):'';
+  const clean=s=>String(s||'').replace(/[\\\/:*?"<>|／]/g,'').replace(/\s+/g,'');
+  const type=clean(d.typeLabel||d.docTitle);
+  const name=clean(d.residentName||d.to);
+  return [ymTxt,type,name].filter(Boolean).join('_')||'書類';
+}
 function doPrint(){
   const d=window._printDoc||currentDoc;if(!d)return;
   $('printArea').innerHTML=docHTML(d);
+  const _t=document.title;
+  document.title=docFileName(d); // PDF保存時の既定ファイル名（◯年◯月分_種類_利用者名）
+  const restore=()=>{document.title=_t;window.removeEventListener('afterprint',restore);};
+  window.addEventListener('afterprint',restore);
   window.print();
+  setTimeout(restore,3000);
 }
 
 /* ============================================================
