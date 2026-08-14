@@ -51,6 +51,12 @@ table.data tr:hover td{background:#fafcfe}
 .pill{display:inline-block;padding:3px 10px;border-radius:6px;background:#eef2f6;font-size:12px;margin:2px 4px 2px 0}
 .muted{color:var(--sub);font-size:13px}
 .hint{background:#fffbe6;border:1px solid #ffe58f;border-radius:8px;padding:10px 12px;font-size:13px;color:#7a5c00;margin:10px 0}
+table.dccal{border-collapse:collapse;width:100%;max-width:420px;table-layout:fixed}
+table.dccal th{border:1px solid var(--line);padding:6px 0;text-align:center;background:#f0f4f8;font-size:13px;color:var(--sub)}
+table.dccal td{border:1px solid var(--line);padding:0;text-align:center;height:40px}
+td.dccell{cursor:pointer;font-weight:600;user-select:none}
+td.dccell:hover{background:#eef6ff}
+td.dccell.on{background:#f6921e;color:#fff}
 .doc-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:720px){.doc-type-grid{grid-template-columns:1fr}}
 .doc-type-grid button{text-align:left;padding:14px;border:2px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-size:14px}
@@ -268,6 +274,18 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     <div class="card">
       <h3>保存済みの月</h3>
       <div id="mc_saved" class="muted">まだ取り込まれた月はありません。</div>
+    </div>
+
+    <div class="card">
+      <h2>🗓 デイサービス利用日（通所介護日）</h2>
+      <p class="muted">通所介護の日を登録すると、その日の<b>お昼・おやつ</b>を請求書の食費から自動で除きます（デイの請求と二重になるのを防ぎます）。翌月分などの<b>前払い（暫定）請求書</b>にも使えます。日付を押すと<b style="color:#e07a1f">オレンジ＝通所日</b>です。</p>
+      <div class="grid2">
+        <div><label>入居者</label><select id="dc_resident" onchange="renderDaycareCal()"><option value="">— 選択 —</option></select></div>
+        <div><label>対象月（未来の月もOK）</label><input type="month" id="dc_month" onchange="renderDaycareCal()"></div>
+      </div>
+      <div id="dc_cal" style="margin-top:12px"><div class="muted">入居者と対象月を選んでください。</div></div>
+      <div class="row-actions"><button class="btn sec" onclick="clearDaycare()">この月の通所日をクリア</button></div>
+      <div class="hint">前払い（暫定）請求書は、生保の方の作成画面（②書類を選ぶ）に「前払い（暫定）請求書」ボタンが出ます。ここで登録した通所日のお昼・おやつが自動で差し引かれます。</div>
     </div>
   </section>
 
@@ -537,6 +555,11 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <div><label>光熱費区分</label><select id="rm_kounetsu"><option value="イケイケ立替">イケイケ立替（家賃と同時引落し）</option><option value="個人契約">個人契約（請求対象外）</option></select></div>
       <div><label>宛先区分</label><select id="rm_atesaki"><option value="請求先">請求先／担当者あて</option><option value="ご家族">ご家族あて</option></select></div>
     </div>
+    <div class="grid2">
+      <div><label>支払方法</label><select id="rm_pay"><option value="振込">振込（振込先を表示）</option><option value="引落し">引落し（口座振替・振込先を表示しない）</option></select></div>
+      <div><label>書類の名称</label><select id="rm_title"><option value="請求書">請求書</option><option value="明細書">明細書</option></select></div>
+    </div>
+    <div class="muted" style="margin-top:4px">※「引落し」は口座振替の方（振込先を出さず「口座振替（自動引落し）」と記載）。「明細書」は請求書の代わりに明細書として発行します。</div>
     <label>ご家族あて氏名（宛先区分＝ご家族のとき）</label><input id="rm_family">
     <h3>個別単価（空欄なら設定の単価を使用）</h3>
     <div class="grid3">
@@ -622,6 +645,7 @@ function defaultState(){return{
   residents:[],
   documents:[],
   mealData:{},
+  daycare:{},
   mailing:{},
   counters:{byYm:{},batch:{}}
 };}
@@ -680,7 +704,7 @@ async function pullNow(){
     if(!r.ok){throw new Error('HTTP '+r.status);}
     const j=await r.json();github.sha=j.sha;
     const data=JSON.parse(b64ToUtf8(j.content));
-    state=Object.assign(defaultState(),data);state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};state.mailing=state.mailing||{};
+    state=Object.assign(defaultState(),data);state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};state.mailing=state.mailing||{};state.daycare=state.daycare||{};
     github.connected=true;saveLocal();renderAll();
     setSync(true,'クラウドと同期済み（最終読込 '+new Date().toLocaleTimeString('ja-JP')+'）');
   }catch(e){setSync(false,'読込エラー：'+e.message);}
@@ -772,6 +796,8 @@ function editResident(id){
   $('rm_name').value=r.name||'';$('rm_room').value=r.room||'';$('rm_kubun').value=r.kubun||'通常';
   $('rm_movein').value=r.movein||'';$('rm_billto').value=r.billto||'';$('rm_tanto').value=r.tanto||'';
   $('rm_kounetsu').value=r.kounetsu||'イケイケ立替';$('rm_atesaki').value=r.atesaki||'請求先';$('rm_family').value=r.family||'';
+  if($('rm_pay'))$('rm_pay').value=r.pay||'振込';
+  if($('rm_title'))$('rm_title').value=r.titleMode||'請求書';
   $('rm_rent').value=r.rent!=null?r.rent:'';$('rm_kyo').value=r.kyo!=null?r.kyo:'';$('rm_sup').value=r.sup!=null?r.sup:'';
   $('rm_note').value=r.note||'';
   if($('rm_mode'))$('rm_mode').value=r.otameshi?'otameshi':(r.external?'gaibu':'nyukyo');
@@ -782,6 +808,7 @@ function saveResident(){
   const obj={id:editingResidentId||uid(),name,room:$('rm_room').value.trim(),kubun:$('rm_kubun').value,
     movein:$('rm_movein').value,billto:$('rm_billto').value.trim(),tanto:$('rm_tanto').value.trim(),
     kounetsu:$('rm_kounetsu').value,atesaki:$('rm_atesaki').value,family:$('rm_family').value.trim(),
+    pay:($('rm_pay')?$('rm_pay').value:'振込'),titleMode:($('rm_title')?$('rm_title').value:'請求書'),
     rent:$('rm_rent').value===''?null:+$('rm_rent').value,kyo:$('rm_kyo').value===''?null:+$('rm_kyo').value,sup:$('rm_sup').value===''?null:+$('rm_sup').value,
     external:($('rm_mode')?$('rm_mode').value==='gaibu':false),
     otameshi:($('rm_mode')?$('rm_mode').value==='otameshi':false),
@@ -812,6 +839,7 @@ const DOC_TYPES_SEIHO=[
   {key:'mitsumori_s',label:'見積書（1ヶ月フル予測・援護課提出用）',suffix:'M',docTitle:'見 積 書',desc:'援護課へ提出する、1ヶ月あたりの費用予測（宛名は自動で援護課・御中）'},
   {key:'engo',label:'援護課あて（家賃分）',suffix:'G',docTitle:'請 求 書',desc:'住宅使用料（家賃分）。援護課へ送る書類'},
   {key:'honnin',label:'ご本人あて請求書（家賃以外）',suffix:'H',docTitle:'請 求 書',desc:'食費・おやつ・生活支援・光熱費など、家賃以外の本当の請求書'},
+  {key:'zantei',label:'前払い（暫定）請求書・ご本人あて',suffix:'Z',docTitle:'請 求 書',desc:'翌月分などの先払い。お昼＋おやつを毎日分から通所介護日（カレンダー）を差し引いて算定'},
   {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
   {key:'ryoshu_engo',label:'領収書（援護課あて・家賃分）',suffix:'Y',docTitle:'領 収 書',desc:'援護課からの家賃（住宅使用料）入金に対する領収書'},
   {key:'ryoshu',label:'領収書（ご本人あて）',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
@@ -1041,7 +1069,53 @@ function batchCreateForMonth(ym){
   alert(created+' 件の請求書を作成しました'+(skipped?'（'+skipped+' 件は作成済みのためスキップ）':'')+'。\n\n'+madeList.join('\n')+'\n\n「履歴」タブでご確認ください。');
   renderSavedMeals();
 }
-function renderMealCsv(){renderSavedMeals();if(mcPreview)renderMcPreview();}
+function renderMealCsv(){renderSavedMeals();if(mcPreview)renderMcPreview();fillDaycareResident();}
+/* ===== デイサービス利用日カレンダー ===== */
+function getDaycareDays(rid,ym){return (state.daycare&&state.daycare[ym]&&state.daycare[ym][rid])?state.daycare[ym][rid].slice():[];}
+function fillDaycareResident(){const sel=$('dc_resident');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}（${esc(r.kubun)}${r.room?'・'+esc(r.room):''}）</option>`).join('');sel.value=cur;}
+function renderDaycareCal(){
+  const box=$('dc_cal');if(!box)return;
+  const rid=($('dc_resident')||{}).value, ym=($('dc_month')||{}).value;
+  if(!rid||!ym){box.innerHTML='<div class="muted">入居者と対象月を選んでください。</div>';return;}
+  const y=+ym.slice(0,4), mo=+ym.slice(5,7);
+  const startWd=new Date(y,mo-1,1).getDay(), dim=new Date(y,mo,0).getDate();
+  const days=getDaycareDays(rid,ym);
+  const WD=['日','月','火','水','木','金','土'];
+  let h='<table class="dccal"><thead><tr>'+WD.map(w=>'<th>'+w+'</th>').join('')+'</tr></thead><tbody><tr>';
+  for(let i=0;i<startWd;i++)h+='<td></td>';
+  for(let d=1;d<=dim;d++){const wd=(startWd+d-1)%7;if(wd===0&&d>1)h+='</tr><tr>';h+='<td class="dccell'+(days.includes(d)?' on':'')+'" onclick="toggleDaycare('+d+')">'+d+'</td>';}
+  h+='</tr></tbody></table>';
+  const sorted=days.slice().sort((a,b)=>a-b);
+  h+='<div class="muted" style="margin-top:8px">通所日：'+(sorted.length?sorted.join('・')+'日（計 '+sorted.length+' 日）':'なし')+'</div>';
+  box.innerHTML=h;
+}
+function toggleDaycare(d){
+  const rid=($('dc_resident')||{}).value, ym=($('dc_month')||{}).value;if(!rid||!ym)return;
+  state.daycare=state.daycare||{};state.daycare[ym]=state.daycare[ym]||{};
+  const arr=state.daycare[ym][rid]=state.daycare[ym][rid]||[];
+  const i=arr.indexOf(d);if(i>=0)arr.splice(i,1);else arr.push(d);
+  if(!arr.length)delete state.daycare[ym][rid];
+  persist();renderDaycareCal();
+}
+function clearDaycare(){const rid=($('dc_resident')||{}).value, ym=($('dc_month')||{}).value;if(!rid||!ym)return;if(state.daycare&&state.daycare[ym])delete state.daycare[ym][rid];persist();renderDaycareCal();}
+// 食事CSVの喫食データから通所日のお昼・おやつを除く
+function adjustMealByDaycare(p,dcDays){
+  if(!p||!dcDays||!dcDays.length)return p;
+  const q=JSON.parse(JSON.stringify(p));
+  const hiruU=(p.hiruCount>0)?Math.round(p.hiruAmt/p.hiruCount):500;
+  const oyaU=(p.oyaCount>0)?Math.round(p.oyaAmt/p.oyaCount):200;
+  const cut=(daysKey,cntKey,amtKey,unit)=>{
+    const arr=(q[daysKey]||[]).map(Number);
+    const keep=arr.filter(d=>!dcDays.includes(d));
+    const removed=arr.length-keep.length;
+    if(removed>0){q[daysKey]=keep.map(String);q[cntKey]=Math.max(0,(+q[cntKey]||0)-removed);q[amtKey]=Math.max(0,(+q[amtKey]||0)-removed*unit);}
+  };
+  cut('hiruDays','hiruCount','hiruAmt',hiruU);
+  cut('oyaDays','oyaCount','oyaAmt',oyaU);
+  q.total=(+q.asaAmt||0)+(+q.hiruAmt||0)+(+q.yoruAmt||0)+(+q.bentoAmt||0)+(+q.oyaAmt||0)+(+q.drinkAmt||0)+(+q.haizenAmt||0);
+  q._daycareCut=dcDays.length;
+  return q;
+}
 
 // 取込データから請求明細を生成
 function getMealImport(name,ym){
@@ -1148,7 +1222,8 @@ function buildDoc(r,typeKey){
     const moveInThisMonth=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
     const partial=moveInThisMonth&&daysMove<dim; // 月途中入居のみ日割り。まるまる1ヶ月は満額
     const mealDays=partial?daysMove:dim;
-    const mImp=getMealImport(r.name,monthStr);
+    let mImp=getMealImport(r.name,monthStr);
+    if(mImp)mImp=adjustMealByDaycare(mImp,getDaycareDays(r.id,monthStr));
     const mealItems=mImp?importMealLines(mImp):mealLines(r,mealDays);
     const housing=partial?[rentLine(daysMove),kyoLine(daysMove)]:[rentFull(),kyoFull()];
     const supItem=partial?supLine(daysMove):supFull();
@@ -1179,7 +1254,8 @@ function buildDoc(r,typeKey){
     const moveInThisMonth=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
     const partial=moveInThisMonth&&daysMove<dim;
     const mealDays=partial?daysMove:dim;
-    const mImpH=getMealImport(r.name,monthStr);
+    let mImpH=getMealImport(r.name,monthStr);
+    if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDaycareDays(r.id,monthStr));
     const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays);
     items=[...mealItemsH, partial?supLine(daysMove):supFull()];
     if(kyo>0)items.unshift(partial?kyoLine(daysMove):kyoFull());
@@ -1189,10 +1265,29 @@ function buildDoc(r,typeKey){
       '食費・生活支援サービス費は課税。',
       (mImpH?'食費は '+monthStr+' の喫食実績（食事CSV取込）に基づく実額です。':'食費は朝食（食事＋配膳）・昼・夕・おやつの単価×回数です。'),
       '光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。個人契約の方は請求対象外。'];
+  }else if(typeKey==='zantei'){ // 生保・前払い（暫定）ご本人あて
+    const dc=getDaycareDays(r.id,monthStr);
+    const eatDays=Math.max(0,dim-dc.length);
+    const mm=state.settings.meals;const hiruU=+mm.hiru||500, oyaU=+mm.oya||200;
+    lead='下記のとおり、前払い（暫定）としてご請求申し上げます。【請求区分：'+(monthD?(monthD.getMonth()+1):'')+'月分 前払い（暫定）・家賃以外】';
+    const cutNote='当月'+dim+'日−通所介護'+dc.length+'日＝'+eatDays+'日分（前払い暫定・課税）';
+    items=[
+      {name:'昼食',tanka:hiruU,qty:eatDays,kijun:'食',amount:hiruU*eatDays,tekiyo:cutNote,inc:true},
+      {name:'おやつ',tanka:oyaU,qty:eatDays,kijun:'食',amount:oyaU*eatDays,tekiyo:cutNote,inc:true},
+      supFull()
+    ];
+    if(kyo>0)items.unshift(kyoFull());
+    items.push(kounetsuLine(r,'honnin'));
+    dueLabel='お支払期限';due=endOfMonth(monthD||issue);
+    notes=['本請求は前払い（暫定）です。通所介護（デイサービス）ご利用日のお昼・おやつは、デイの請求に含まれるため除いています。',
+      '通所日は「食事CSV取込」画面の「デイサービス利用日」カレンダーの登録に基づきます（当月 '+dim+'日 のうち '+dc.length+'日 を通所として除外）。',
+      '実績が確定したら、食事CSV・デイ明細で差額を精算します（差額精算金として次回に反映）。',
+      '食費・生活支援サービス費は課税。'];
   }else if(typeKey==='gaibu_meal'){ // 外部利用者・食事のみ
     lead='下記のとおりご請求申し上げます。【請求区分：食事代（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
     const mealDays=daysInMonth(monthD||issue);
-    const mImpG=getMealImport(r.name,monthStr);
+    let mImpG=getMealImport(r.name,monthStr);
+    if(mImpG)mImpG=adjustMealByDaycare(mImpG,getDaycareDays(r.id,monthStr));
     items=mImpG?importMealLines(mImpG):mealLines(r,mealDays);
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
     notes=['本請求はデイサービスご利用時の食事代です（入居に伴う家賃・共益費等はありません）。',
@@ -1238,8 +1333,15 @@ function buildDoc(r,typeKey){
     if(karios.length)notes.push('お支払済みの仮押さえ前金 '+yen(karios.reduce((s,k)=>s+(+k.total||0),0))+' を差し引いています（二重請求防止のため）。');
   }
   const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
+  const _isRcpt=(typeKey==='ryoshu'||typeKey==='ryoshu_engo');
+  const _payMode=r.pay||'振込';
+  const _titleMode=r.titleMode||'請求書';
+  // 引落しの方は振込先を出さない（口座振替の記載に切替）。援護課あて等は従来どおり。
+  if(_payMode==='引落し'&&!_isRcpt&&(typeKey==='honnin'||typeKey==='seikyu_yachin'||typeKey==='seikyu_nyukin'||typeKey==='zantei'))showBank=false;
+  // 明細書指定なら見積・領収以外のタイトルを「明細書」に
+  const _effTitle=(!_isRcpt&&_titleMode==='明細書'&&t.docTitle.indexOf('見積')<0)?'明 細 書':t.docTitle;
   return{
-    id:uid(),typeKey,typeLabel:t.label,docTitle:t.docTitle,suffix:t.suffix,appliedKario,
+    id:uid(),typeKey,typeLabel:t.label,docTitle:_effTitle,payMode:_payMode,titleMode:_titleMode,suffix:t.suffix,appliedKario,
     residentId:r.id,residentName:r.name,room:r.room,kubun:r.kubun,external:!!r.external,otameshi:!!r.otameshi,
     to,keisho,tanto,issue:issue?issue.toISOString().slice(0,10):todayStr(),
     move:move?move.toISOString().slice(0,10):'',month:monthStr,
@@ -1433,7 +1535,7 @@ function docHTML(d){
     }).join('');
     inner=`
       <div class="dtitle">${esc(d.docTitle)}</div>
-      ${(['seikyu_yachin','honnin','engo','gaibu_meal'].includes(d.typeKey)&&d.month)?`<div style="text-align:center;font-size:15px;font-weight:700;letter-spacing:2px;margin:2px 0 8px">${esc(ymLabel(d.month))}</div>`:''}
+      ${(['seikyu_yachin','honnin','engo','gaibu_meal','zantei'].includes(d.typeKey)&&d.month)?`<div style="text-align:center;font-size:15px;font-weight:700;letter-spacing:2px;margin:2px 0 8px">${esc(ymLabel(d.month))}</div>`:''}
       ${header}
       ${d.lead?`<div class="lead">${esc(d.lead)}</div>`:''}
       <div class="bigsum"><span>${d.docTitle.includes('見積')?'お見積金額（税込）':'ご請求金額（税込）'}</span><span class="n">${yen(d.total)}</span></div>
@@ -1443,12 +1545,16 @@ function docHTML(d){
           <tr class="grand"><td colspan="4">合計（税込）</td><td class="n">${num(d.total)}</td><td></td></tr>
         </tbody>
       </table>
-      ${d.showBank?`
+      ${d.payMode==='引落し'?`
+      <div class="bank">
+        <div><b>【お支払い方法】</b> お支払いは口座振替（自動引落し）です。ご登録の口座から自動で引き落とされます。</div>
+        ${dueD?`<div style="margin-top:4px"><b>${esc(d.dueLabel||'引落し日')}：</b>${esc(fmtWareki(dueD))}</div>`:''}
+      </div>`:(d.showBank?`
       <div class="bank">
         <div>${esc(b.notice)}</div>
         <div style="margin-top:6px"><b>【お振込先】</b> ${esc(b.bank)}　${esc(b.acc)}　${esc(b.holder)}</div>
         ${dueD?`<div><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD))}</div>`:''}
-      </div>`:(dueD?`<div class="bank"><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD))}</div>`:'')}
+      </div>`:(dueD?`<div class="bank"><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD))}</div>`:''))}
       ${d.notes&&d.notes.length?`<div class="notes"><b>【備考】</b>${d.notes.map(n=>`<div>・${esc(n)}</div>`).join('')}</div>`:''}`;
   }
   return `<div class="doc">${inner}</div>`;
