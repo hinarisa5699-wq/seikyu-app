@@ -1085,25 +1085,24 @@ function batchCreateForMonth(ym){
   const names=new Set((md.people||[]).map(p=>nkey(p.name)));
   const targets=state.residents.filter(r=>names.has(nkey(r.name))&&!r.otameshi); // お試しは一括対象外（個別作成）
   if(!targets.length){alert('この月の食事データに一致する登録入居者がいません。先に入居者を同じ氏名で登録してください。');return;}
-  if(!confirm(ym+' の食事データに一致する '+targets.length+' 名の請求書をまとめて作成します。よろしいですか？\n（区分に応じて：外部＝食事のみ／生保＝ご本人あて／通常＝家賃時。作成済みの同月・同種類はスキップ）'))return;
-  // 書類作成タブの隠しフィールドを一時設定（buildDocが参照）
+  const tkOf=r=>r.external?'gaibu_meal':(r.kubun==='生保'?'honnin':'seikyu_yachin');
+  const dupN=targets.filter(r=>state.documents.some(d=>d.residentId===r.id&&d.month===ym&&d.typeKey===tkOf(r))).length;
+  if(!confirm(ym+' の '+targets.length+' 名の請求書をまとめて作成します。\n（既存は消さず、同じ月でも新しく作成して履歴に残します'+(dupN?'。'+dupN+' 名はこの月の同種類が既にあり、別番号でもう1件増えます':'')+'）\n\nよろしいですか？'))return;
   const prevMonth=$('createMonth').value, prevIssue=$('createIssue').value, prevMove=$('createMoveIn').value;
   $('createMonth').value=ym; $('createIssue').value=todayStr();
-  let created=0, skipped=0; const madeList=[];
+  let created=0; const madeList=[];
   targets.forEach(r=>{
     $('createMoveIn').value=r.movein||'';
-    const typeKey = r.external ? 'gaibu_meal' : (r.kubun==='生保' ? 'honnin' : 'seikyu_yachin');
-    if(state.documents.some(d=>d.residentId===r.id && d.month===ym && d.typeKey===typeKey)){skipped++;return;}
+    const typeKey=tkOf(r);
     const doc=buildDoc(r,typeKey);
     doc.number=ensureNumber(doc,true);
     doc.savedAt=nowStamp();
     state.documents.push(JSON.parse(JSON.stringify(doc)));
     created++; madeList.push(r.name+'（'+yen(doc.total)+'）');
   });
-  // 復元
   $('createMonth').value=prevMonth; $('createIssue').value=prevIssue; $('createMoveIn').value=prevMove;
-  persist();
-  alert(created+' 件の請求書を作成しました'+(skipped?'（'+skipped+' 件は作成済みのためスキップ）':'')+'。\n\n'+madeList.join('\n')+'\n\n「履歴」タブでご確認ください。');
+  saveLocal();if(github.connected)pushNow();
+  alert(created+' 件作成しました（既存はそのまま残しています）。\n\n'+madeList.join('\n')+'\n\n「履歴」タブでご確認ください。');
   renderSavedMeals();
 }
 // 取込内容は端末専用の保存領域に置く（クラウド読込で上書きされない＝再読込しても消えない）
