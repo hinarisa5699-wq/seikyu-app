@@ -478,6 +478,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <div><label>入居金・敷金（一時金）</label><input type="number" id="p_nyu"></div>
         <div><label>火災保険料（3年分）</label><input type="number" id="p_kasai"></div>
         <div><label>光熱費 概算（見積用）</label><input type="number" id="p_kounetsu"></div>
+        <div><label>光熱費・携帯電話（生保見積用）</label><input type="number" id="p_keitai"></div>
       </div>
       <div class="grid2">
         <div><label>日割の基準日数</label><input type="number" id="p_kijun"></div>
@@ -647,7 +648,7 @@ const LS_CFG='seikyu_github_cfg_v1';
 function defaultState(){return{
   settings:{
     company:{housing:'サービス付き高齢者向け住宅 アロハハウス',corp:'株式会社イケイケカンパニー',addr:'〒194-0022 東京都町田市森野4-17-17',tel:'TEL: 042-785-5023',ceo:'代表取締役 池田 友子',code:'KM'},
-    prices:{rent_n:70000,rent_s:53700,kyo_n:30000,kyo_s:0,sup_n:30000,sup_s:30000,nyu:210000,kasai:12530,kounetsu:15000,kijun:30,yosoku:30},
+    prices:{rent_n:70000,rent_s:53700,kyo_n:30000,kyo_s:0,sup_n:30000,sup_s:30000,nyu:210000,kasai:12530,kounetsu:15000,keitai:6500,kijun:30,yosoku:30},
     meals:{asa:200,asaH:150,asaReq:true,hiru:500,hiruH:150,yoru:500,yoruH:150,oya:200,oyaH:0},
     bank:{bank:'きらぼし銀行（0137）町田支店（810）',acc:'普通　7909420',holder:'カ）イケイケカンパニー',
       notice:'お手数をおかけいたしますが、下記口座まで期限までにお振込みくださいますようお願い申し上げます。なお、振込手数料はご負担くださいますようお願い申し上げます。',
@@ -1286,18 +1287,22 @@ function buildDoc(r,typeKey){
       '家賃・火災保険料・入居金は消費税非課税。食費・生活支援サービス費・光熱費は課税。',
       '食費は各食の単価×回数で試算しています（実際のご請求は喫食実績＝食事CSVに基づく実額になります）。',
       '光熱費は実費とし別途精算します。','本見積書の有効期限は発行日より1ヶ月です。'];
-  }else if(typeKey==='mitsumori_s'){ // 生保・1ヶ月フル予測
+  }else if(typeKey==='mitsumori_s'){ // 生保・1ヶ月フル予測（援護課提出用）
     const yosoku=+p.yosoku||30;
+    const mm=state.settings.meals;const hiruU=+mm.hiru||500, yoruU=+mm.yoru||500;
+    const keitai=(p.keitai!=null?+p.keitai:6500);
     lead='下記のとおり、1ヶ月あたりにかかる費用をお見積り（予測）申し上げます。';
-    items=[rentFull()];
-    if(kyo>0)items.push(kyoFull());
-    items.push(...mealLines(r,yosoku,'予測'+yosoku+'日'),supFull(),kounetsuLine(r,'mitsumori_s'));
-    // 初回のみ
-    items.push(nyuLine(),kasaiLine());
+    items=[
+      rentFull(),
+      supFull(),
+      {name:'昼食',tanka:hiruU,qty:yosoku,kijun:'食',amount:hiruU*yosoku,tekiyo:'1ヶ月予測（'+yosoku+'日分・課税）',inc:true},
+      {name:'夕食',tanka:yoruU,qty:yosoku,kijun:'食',amount:yoruU*yosoku,tekiyo:'1ヶ月予測（'+yosoku+'日分・課税）',inc:true},
+      {name:'光熱費・携帯電話',tanka:'－',qty:'－',kijun:'－',amount:keitai,tekiyo:'光熱費・携帯電話（概算・実費精算）',inc:true}
+    ];
     dueLabel='お振込期限';due=move?addMonths(move,1):endOfMonth(issue);
-    notes=['本見積書は援護課へご提出用の、1ヶ月あたりにかかる費用の予測です（食費は '+yosoku+'日 で試算）。',
-      '入居金・火災保険料は初回のみ（日割対象外）。家賃・火災保険料・入居金は非課税、食費・生活支援サービス費・光熱費は課税。',
-      '家賃分は援護課（住宅扶助）へ、家賃以外はご本人へご請求します。','光熱費は実費・概算です。'];
+    notes=['本見積書は援護課へご提出用の、1ヶ月あたりにかかる費用の予測です（食費は昼食・夕食を各 '+yosoku+'日分 で試算）。',
+      '家賃は非課税、生活支援サービス費・食費は課税。光熱費・携帯電話は概算（実費精算）。',
+      '家賃分は援護課（住宅扶助）へ、家賃以外はご本人へご請求します。'];
   }else if(typeKey==='seikyu_nyukin'){ // 入居金請求
     lead='下記のとおりご請求申し上げます。【請求区分：初期費用（入居金・火災保険料）】'+(move?'　※入居日 '+fmtWareki(move):'');
     items=[nyuLine(),kasaiLine()];
@@ -1911,7 +1916,7 @@ function fillSettingsForm(){
   const c=state.settings.company,p=state.settings.prices,m=state.settings.meals,b=state.settings.bank;
   $('s_housing').value=c.housing;$('s_corp').value=c.corp;$('s_ceo').value=c.ceo;$('s_addr').value=c.addr;$('s_tel').value=c.tel;$('s_code').value=c.code;
   $('p_rent_n').value=p.rent_n;$('p_rent_s').value=p.rent_s;$('p_kyo_n').value=p.kyo_n;$('p_kyo_s').value=p.kyo_s;$('p_sup_n').value=p.sup_n;$('p_sup_s').value=p.sup_s;
-  $('p_nyu').value=p.nyu;$('p_kasai').value=p.kasai;$('p_kounetsu').value=p.kounetsu;$('p_kijun').value=p.kijun;$('p_yosoku').value=p.yosoku;
+  $('p_nyu').value=p.nyu;$('p_kasai').value=p.kasai;$('p_kounetsu').value=p.kounetsu;if($('p_keitai'))$('p_keitai').value=(p.keitai!=null?p.keitai:6500);$('p_kijun').value=p.kijun;$('p_yosoku').value=p.yosoku;
   $('m_asa').value=m.asa;$('m_asaH').value=m.asaH;$('m_hiru').value=m.hiru;$('m_hiruH').value=m.hiruH;$('m_yoru').value=m.yoru;$('m_yoruH').value=m.yoruH;$('m_oya').value=m.oya;$('m_oyaH').value=m.oyaH;
   if($('m_asaReq'))$('m_asaReq').checked=(m.asaReq!==false);
   $('b_bank').value=b.bank;$('b_acc').value=b.acc;$('b_holder').value=b.holder;$('b_notice').value=b.notice;$('b_engo').value=b.engo;
@@ -1927,7 +1932,7 @@ function mealTotals(){
 function saveSettingsFromForm(){
   const s=state.settings;
   s.company={housing:$('s_housing').value,corp:$('s_corp').value,ceo:$('s_ceo').value,addr:$('s_addr').value,tel:$('s_tel').value,code:$('s_code').value};
-  s.prices={rent_n:+$('p_rent_n').value,rent_s:+$('p_rent_s').value,kyo_n:+$('p_kyo_n').value,kyo_s:+$('p_kyo_s').value,sup_n:+$('p_sup_n').value,sup_s:+$('p_sup_s').value,nyu:+$('p_nyu').value,kasai:+$('p_kasai').value,kounetsu:+$('p_kounetsu').value,kijun:+$('p_kijun').value,yosoku:+$('p_yosoku').value};
+  s.prices={rent_n:+$('p_rent_n').value,rent_s:+$('p_rent_s').value,kyo_n:+$('p_kyo_n').value,kyo_s:+$('p_kyo_s').value,sup_n:+$('p_sup_n').value,sup_s:+$('p_sup_s').value,nyu:+$('p_nyu').value,kasai:+$('p_kasai').value,kounetsu:+$('p_kounetsu').value,keitai:($('p_keitai')?+$('p_keitai').value:6500),kijun:+$('p_kijun').value,yosoku:+$('p_yosoku').value};
   s.meals={asa:+$('m_asa').value,asaH:+$('m_asaH').value,asaReq:($('m_asaReq')?$('m_asaReq').checked:true),hiru:+$('m_hiru').value,hiruH:+$('m_hiruH').value,yoru:+$('m_yoru').value,yoruH:+$('m_yoruH').value,oya:+$('m_oya').value,oyaH:+$('m_oyaH').value};
   s.bank={bank:$('b_bank').value,acc:$('b_acc').value,holder:$('b_holder').value,notice:$('b_notice').value,engo:$('b_engo').value};
   persist();alert('設定を保存しました。');
