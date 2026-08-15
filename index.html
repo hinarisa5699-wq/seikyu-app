@@ -299,9 +299,14 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     </div>
 
     <div class="card">
-      <h3>④ 請求書を全員分まとめて作成</h3>
-      <p class="muted">保存済みの月ごとに、一致する入居者全員分の請求書をまとめて作成します（区分に応じて自動：生保＝ご本人あて／通常＝家賃時。通所日のお昼・おやつは自動で除外）。</p>
-      <div id="mc_saved" class="muted">まだ取り込まれた月はありません。</div>
+      <h3>④ 請求書を作成（1人ずつ）</h3>
+      <p class="muted">デイサービス利用日は人によって違うので、③のカレンダーで各人の通所日を確認・調整してから、<b>1人ずつ</b>作成します。月と入居者を選んで「作成」を押すと、その方の請求書が<b>内容確認画面</b>で開きます（通所日のお昼・おやつは自動で除外）。金額を確認して「保存」してください。</p>
+      <div class="grid2">
+        <div><label>対象月</label><input type="month" id="bc_month"></div>
+        <div><label>入居者</label><select id="bc_resident"><option value="">— 選択 —</option></select></div>
+      </div>
+      <div class="row-actions"><button class="btn" onclick="createOneInvoice()">この入居者の請求書を作成（内容確認へ）</button></div>
+      <div style="margin-top:12px"><b>取り込んだ月</b><div id="mc_saved" class="muted" style="margin-top:4px">まだ取り込まれた月はありません。</div></div>
     </div>
 
     <div class="card">
@@ -1072,12 +1077,30 @@ function renderSavedMeals(){
     return `<div style="padding:10px 0;border-bottom:1px solid var(--line)">
       <b>${esc(ym)}</b>　入居者 ${res.length}名／全${(d.people||[]).length}名　合計 ${yen(tot)}　<span class="muted">(取込 ${esc(d.importedAt||'')}／登録一致 ${match}名)</span>
       <div class="row-actions" style="margin-top:6px">
-        <button class="btn sm" onclick="batchCreateForMonth('${ym}')">📄 この月の請求書を全員分まとめて作成</button>
+        <button class="btn sec sm" onclick="$('bc_month').value='${ym}';fillBcResident();window.scrollTo(0,document.getElementById('bc_month').getBoundingClientRect().top+window.scrollY-100)">この月を選ぶ（上の④へ）</button>
         <button class="btn danger sm" onclick="delMealImport('${ym}')">削除</button>
       </div></div>`;
   }).join('');
 }
 function delMealImport(ym){if(!confirm(ym+' の食事データを削除しますか？'))return;delete state.mealData[ym];persist();renderSavedMeals();}
+// ④ 1人ずつ請求書を作成（内容確認画面を開く）
+function fillBcResident(){const sel=$('bc_resident');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.filter(r=>!r.otameshi).map(r=>`<option value="${r.id}">${esc(r.name)}（${esc(r.kubun)}${r.external?'・外部':''}${r.room?'・'+esc(r.room):''}）</option>`).join('');sel.value=cur;}
+function createOneInvoice(){
+  const ym=($('bc_month')||{}).value, rid=($('bc_resident')||{}).value;
+  if(!ym){alert('対象月を選んでください。');return;}
+  if(!rid){alert('入居者を選んでください。');return;}
+  const r=state.residents.find(x=>x.id===rid); if(!r)return;
+  const typeKey=r.external?'gaibu_meal':(r.kubun==='生保'?'honnin':'seikyu_yachin');
+  const pm=($('createMonth')||{}).value, pr=($('createResident')||{}).value, pmv=($('createMoveIn')||{}).value, pi=($('createIssue')||{}).value;
+  if($('createMonth'))$('createMonth').value=ym;
+  if($('createResident'))$('createResident').value=rid;
+  if($('createMoveIn'))$('createMoveIn').value=r.movein||'';
+  if($('createIssue'))$('createIssue').value=$('createIssue').value||todayStr();
+  currentDoc=buildDoc(r,typeKey);
+  currentDoc.number=ensureNumber(currentDoc,false);
+  if($('createMonth'))$('createMonth').value=pm; if($('createResident'))$('createResident').value=pr; if($('createMoveIn'))$('createMoveIn').value=pmv; if($('createIssue'))$('createIssue').value=pi;
+  fillDocForm();openModal('docModal');renderDocPreview();
+}
 // 取込月の食事データに一致する登録入居者ぶんの請求書を一括作成
 function batchCreateForMonth(ym){
   const md=state.mealData&&state.mealData[ym];
@@ -1118,6 +1141,8 @@ function renderMealCsv(){
   if(_pdfDaycare&&_pdfDaycare.ym){$('dc_pdfCard').style.display='';renderPdfDaycarePreview(_pdfDaycare,_pdfDaycare._fname||'');if($('dc_month')&&!$('dc_month').value)$('dc_month').value=_pdfDaycare.ym;}
   renderDaycareCal();
   fillSettleResident();
+  fillBcResident();
+  if($('bc_month')&&!$('bc_month').value){const ks=Object.keys(state.mealData||{}).sort();if(ks.length)$('bc_month').value=ks[ks.length-1];else if($('mc_month')&&$('mc_month').value)$('bc_month').value=$('mc_month').value;}
 }
 /* ===== デイサービス利用日カレンダー ===== */
 function getDaycareDays(rid,ym){return (state.daycare&&state.daycare[ym]&&state.daycare[ym][rid])?state.daycare[ym][rid].slice():[];}
