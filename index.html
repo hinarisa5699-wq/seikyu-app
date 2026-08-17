@@ -713,6 +713,15 @@ let currentDoc=null; // editing doc
 const $=id=>document.getElementById(id);
 const yen=n=>'¥'+Math.round(n||0).toLocaleString('ja-JP');
 const num=n=>Math.round(n||0).toLocaleString('ja-JP');
+// 単価表示：数値なら金額表示、空・「－」・NaN等は「－」、その他文字列はそのまま
+function tankaCell(t){
+  if(t==null||t===''||t==='－')return '－';
+  const s=String(t).trim();
+  if(s===''||s.toLowerCase()==='nan')return '－';
+  const n=Number(s.replace(/[,，]/g,''));
+  return isNaN(n)?esc(s):num(n);
+}
+function tankaInputVal(t){const s=(t==null)?'':String(t);return (s.toLowerCase()==='nan')?'':s;}
 function todayStr(){const d=new Date();return d.toISOString().slice(0,10);}
 function nowStamp(){const d=new Date();const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
 function pad2(n){return String(n).padStart(2,'0');}
@@ -1649,7 +1658,7 @@ function renderItemRows(){
   tb.innerHTML=currentDoc.items.map((it,i)=>`<tr>
     <td class="c"><input type="checkbox" ${it.inc?'checked':''} onchange="itChange(${i},'inc',this.checked)"></td>
     <td><input value="${esc(it.name)}" onchange="itChange(${i},'name',this.value)"></td>
-    <td><input value="${esc(it.tanka)}" onchange="itChange(${i},'tanka',this.value)"></td>
+    <td><input value="${esc(tankaInputVal(it.tanka))}" onchange="itChange(${i},'tanka',this.value)"></td>
     <td><input value="${esc(it.qty)}" onchange="itChange(${i},'qty',this.value)"></td>
     <td><input value="${esc(it.kijun)}" onchange="itChange(${i},'kijun',this.value)"></td>
     <td><input class="num" value="${it.amount}" onchange="itChange(${i},'amount',this.value)"></td>
@@ -1783,7 +1792,7 @@ function docHTML(d){
       </div>`;
   }else{
     const rows=d.items.filter(it=>it.inc).map(it=>{
-      return `<tr><td>${esc(it.name)}</td><td class="n">${it.tanka==='－'||it.tanka===''?esc(it.tanka||'－'):num(it.tanka)}</td><td class="c">${esc(it.qty)}</td><td class="c">${esc(it.kijun)}</td><td class="n">${num(it.amount)}</td><td>${esc(it.tekiyo)}</td></tr>`;
+      return `<tr><td>${esc(it.name)}</td><td class="n">${tankaCell(it.tanka)}</td><td class="c">${esc(it.qty)}</td><td class="c">${esc(it.kijun)}</td><td class="n">${num(it.amount)}</td><td>${esc(it.tekiyo)}</td></tr>`;
     }).join('');
     inner=`
       <div class="dtitle">${esc(d.docTitle)}</div>
