@@ -305,6 +305,21 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <div><label>対象月</label><input type="month" id="bc_month"></div>
         <div><label>入居者</label><select id="bc_resident"><option value="">— 選択 —</option></select></div>
       </div>
+      <details style="margin-top:10px">
+        <summary style="cursor:pointer;font-weight:600">月途中で区分（生保⇄通常）が変わる方の日割り設定</summary>
+        <label style="margin-top:8px"><input type="checkbox" id="bc_split" style="width:auto"> 期間・区分を指定して日割りする（家賃・共益費・生活支援サービス費）</label>
+        <div class="grid3" style="margin-top:6px">
+          <div><label>期間1 開始</label><input type="date" id="bc_s1s"></div>
+          <div><label>期間1 終了</label><input type="date" id="bc_s1e"></div>
+          <div><label>期間1 区分</label><select id="bc_s1k"><option value="通常">通常</option><option value="生保">生保</option></select></div>
+        </div>
+        <div class="grid3" style="margin-top:6px">
+          <div><label>期間2 開始（任意）</label><input type="date" id="bc_s2s"></div>
+          <div><label>期間2 終了</label><input type="date" id="bc_s2e"></div>
+          <div><label>期間2 区分</label><select id="bc_s2k"><option value="生保">生保</option><option value="通常">通常</option></select></div>
+        </div>
+        <div class="hint">例：新城様7月＝期間1「7/1〜7/2・通常」、期間2「7/3〜7/31・生保」。生保＝家賃53,700／共益費0／生活支援30,000、通常＝家賃70,000／共益費30,000／生活支援30,000（設定の単価を使用・各期間で日割り）。食費はCSVがあれば自動で入ります。<br>※生保期間の家賃は本来「援護課あて」です。この請求書には計算として載せていますので、援護課へ別途出す場合は作成後にその行を外してください。</div>
+      </details>
       <div class="row-actions"><button class="btn" onclick="createOneInvoice()">この入居者の請求書を作成（内容確認へ）</button></div>
       <div style="margin-top:12px"><b>取り込んだ月</b><div id="mc_saved" class="muted" style="margin-top:4px">まだ取り込まれた月はありません。</div></div>
     </div>
@@ -1085,6 +1100,39 @@ function renderSavedMeals(){
 function delMealImport(ym){if(!confirm(ym+' の食事データを削除しますか？'))return;delete state.mealData[ym];persist();renderSavedMeals();}
 // ④ 1人ずつ請求書を作成（内容確認画面を開く）
 function fillBcResident(){const sel=$('bc_resident');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.filter(r=>!r.otameshi).map(r=>`<option value="${r.id}">${esc(r.name)}（${esc(r.kubun)}${r.external?'・外部':''}${r.room?'・'+esc(r.room):''}）</option>`).join('');sel.value=cur;}
+function fmtMD(ds){const x=parseD(ds);return x?(x.getMonth()+1)+'/'+x.getDate():ds;}
+// 月途中で区分（生保⇄通常）が変わる方：期間ごとに単価を切り替えて日割り
+function buildSplitDoc(r,ym,segs){
+  const p=state.settings.prices;const monthD=parseD(ym+'-01');const dim=daysInMonth(monthD);
+  const items=[];
+  segs.forEach(sg=>{
+    const isS=sg.kubun==='生保';
+    const rent=isS?+p.rent_s:+p.rent_n, kyo=isS?+p.kyo_s:+p.kyo_n, sup=isS?+p.sup_s:+p.sup_n;
+    const days=Math.round((parseD(sg.end)-parseD(sg.start))/86400000)+1;
+    const lab=fmtMD(sg.start)+'〜'+fmtMD(sg.end)+'（'+sg.kubun+'・'+days+'日）';
+    items.push({name:'家賃',tanka:rent,qty:days,kijun:dim,amount:hiwari(rent,days,dim),tekiyo:'住宅使用料 日割り '+lab+'（非課税）',inc:true});
+    if(kyo>0)items.push({name:'共益費',tanka:kyo,qty:days,kijun:dim,amount:hiwari(kyo,days,dim),tekiyo:'日割り '+lab+'（非課税）',inc:true});
+    items.push({name:'生活支援サービス費',tanka:sup,qty:days,kijun:dim,amount:hiwari(sup,days,dim),tekiyo:'日割り '+lab+'（課税）',inc:true});
+  });
+  let mImp=getMealImport(r.name,ym);
+  if(mImp)mImp=adjustMealByDaycare(mImp,getDaycareDays(r.id,ym));
+  if(mImp)items.push(...importMealLines(mImp));
+  items.push(kounetsuLine(r,'honnin'));
+  const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
+  const to=(r.atesaki==='ご家族'&&r.family)?r.family:r.name;
+  const isRcpt=false;
+  return {
+    id:uid(), typeKey:'seikyu_yachin', typeLabel:'請求書（家賃時・区分切替）', docTitle:(r.titleMode==='明細書'?'明 細 書':'請 求 書'),
+    payMode:r.pay||'振込', titleMode:r.titleMode||'請求書', suffix:'R', appliedKario:[],
+    residentId:r.id, residentName:r.name, room:r.room, kubun:r.kubun, external:!!r.external, otameshi:!!r.otameshi,
+    to, keisho:'様', tanto:'', issue: todayStr(), move:r.movein||'', month:ym, number:'',
+    items, total,
+    notes:['月途中で区分（生保／通常）が変わるため、期間ごとに単価を切り替えて日割りしています。','家賃・共益費は非課税、生活支援サービス費・食費は課税。','光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。','生保期間の家賃は本来「援護課あて」です。援護課へ別途ご請求の場合はその行を外してください。'],
+    dueLabel:'お支払期限', due:endOfMonth(monthD).toISOString().slice(0,10),
+    showBank:(r.pay!=='引落し'), lead:'下記のとおりご請求申し上げます。【請求区分：'+(monthD.getMonth()+1)+'月分 利用料（区分切替・日割り）】',
+    receiptAmt:null, tadashi:''
+  };
+}
 function createOneInvoice(){
   const ym=($('bc_month')||{}).value, rid=($('bc_resident')||{}).value;
   if(!ym){alert('対象月を選んでください。');return;}
@@ -1096,7 +1144,16 @@ function createOneInvoice(){
   if($('createResident'))$('createResident').value=rid;
   if($('createMoveIn'))$('createMoveIn').value=r.movein||'';
   if($('createIssue'))$('createIssue').value=$('createIssue').value||todayStr();
-  currentDoc=buildDoc(r,typeKey);
+  if($('bc_split')&&$('bc_split').checked){
+    const s1s=($('bc_s1s')||{}).value, s1e=($('bc_s1e')||{}).value;
+    if(!s1s||!s1e){alert('期間1の開始日・終了日を入れてください。');return;}
+    const segs=[{start:s1s,end:s1e,kubun:($('bc_s1k')||{}).value||'通常'}];
+    const s2s=($('bc_s2s')||{}).value, s2e=($('bc_s2e')||{}).value;
+    if(s2s&&s2e)segs.push({start:s2s,end:s2e,kubun:($('bc_s2k')||{}).value||'生保'});
+    currentDoc=buildSplitDoc(r,ym,segs);
+  }else{
+    currentDoc=buildDoc(r,typeKey);
+  }
   currentDoc.number=ensureNumber(currentDoc,false);
   if($('createMonth'))$('createMonth').value=pm; if($('createResident'))$('createResident').value=pr; if($('createMoveIn'))$('createMoveIn').value=pmv; if($('createIssue'))$('createIssue').value=pi;
   fillDocForm();openModal('docModal');renderDocPreview();
