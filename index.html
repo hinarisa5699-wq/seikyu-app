@@ -110,10 +110,10 @@ td.dccell.on{background:#f6921e;color:#fff}
 .modal .doc{border:1px solid var(--line);box-shadow:0 4px 20px rgba(0,0,0,.15);transform-origin:top center}
 .modal-actions{position:sticky;bottom:0;background:#fff;padding-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:12px}
 @media print{
-  body *{visibility:hidden}
-  #printArea,#printArea *{visibility:visible}
-  #printArea{display:block;position:absolute;left:0;top:0;width:100%}
-  .doc{width:100%;margin:0;padding:8mm 10mm;page-break-after:always}
+  body>*{display:none !important}
+  #printArea{display:block !important;position:static;width:100%;margin:0}
+  .doc{width:100%;margin:0;padding:8mm 10mm}
+  .doc:last-child{page-break-after:auto}
   .sfdoc{width:100%;margin:0;padding:14mm 16mm;min-height:auto}
   .scdoc{width:100%;margin:0;padding:14mm 16mm}
   @page{size:A4;margin:0}
