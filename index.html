@@ -2093,16 +2093,12 @@ function doPrint(){
   window.print();
   setTimeout(restore,3000);
 }
-/* ===== PDFを直接ダウンロード（印刷ダイアログを使わない） ===== */
-function loadHtml2pdf(){
-  if(window.html2pdf)return Promise.resolve(window.html2pdf);
-  return new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    s.onload=()=>res(window.html2pdf);
-    s.onerror=()=>rej(new Error('PDFライブラリの読み込みに失敗しました（ネット接続をご確認ください）'));
-    document.head.appendChild(s);
-  });
+/* ===== PDFを直接ダウンロード（印刷ダイアログを使わない・A4 1ページに収める） ===== */
+function loadScriptOnce(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('読み込み失敗'));document.head.appendChild(s);});}
+async function loadPdfLibs(){
+  if(!window.html2canvas)await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  if(!(window.jspdf&&window.jspdf.jsPDF))await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  return window.jspdf.jsPDF;
 }
 async function savePdfDoc(d){
   if(!d)return;
@@ -2114,17 +2110,23 @@ async function savePdfDoc(d){
     saveLocal();if(github.connected)pushNow();
     try{renderHistory();}catch(e){}
   }
-  let lib;
-  try{lib=await loadHtml2pdf();}catch(e){alert(e.message||'PDFライブラリを読み込めませんでした。');return;}
+  let jsPDF;
+  try{jsPDF=await loadPdfLibs();}catch(e){alert('PDFライブラリを読み込めませんでした（ネット接続をご確認ください）。');return;}
   const holder=document.createElement('div');
   holder.style.position='fixed';holder.style.left='-10000px';holder.style.top='0';holder.style.background='#fff';holder.style.zIndex='-1';
   holder.innerHTML=docHTML(d);
   const el=holder.querySelector('.doc')||holder;
   el.style.width='190mm';el.style.margin='0';el.style.boxShadow='none';
   document.body.appendChild(holder);
-  const opt={margin:[6,6,6,6],filename:docFileName(d)+'.pdf',image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','avoid-all']}};
-  try{ await lib().set(opt).from(el).save(); }
-  catch(e){ alert('PDFの作成に失敗しました：'+(e&&e.message||e)); }
+  try{
+    const canvas=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true});
+    const pdf=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+    const pageW=210,pageH=297,margin=6,availW=pageW-2*margin,availH=pageH-2*margin;
+    let w=availW, h=canvas.height*availW/canvas.width;
+    if(h>availH){h=availH;w=canvas.width*availH/canvas.height;} // 縦にはみ出す場合は高さに合わせて縮小＝1ページに収める
+    pdf.addImage(canvas.toDataURL('image/jpeg',0.98),'JPEG',(pageW-w)/2,margin,w,h);
+    pdf.save(docFileName(d)+'.pdf');
+  }catch(e){ alert('PDFの作成に失敗しました：'+(e&&e.message||e)); }
   finally{ if(holder.parentNode)holder.parentNode.removeChild(holder); }
 }
 function doPdf(){ savePdfDoc(window._printDoc||currentDoc); }
