@@ -1758,6 +1758,8 @@ function homeShort(housing){
 function docHTML(d){
   const st=state.settings;const c=st.company;const b=st.bank;
   const issueD=parseD(d.issue),dueD=parseD(d.due);
+  const isMeisai=(d.titleMode==='明細書')||(d.docTitle&&d.docTitle.replace(/\s/g,'')==='明細書');
+  const dueD2=isMeisai?null:dueD; // 明細書はお支払期限を出さない
   const isReceipt=(d.typeKey==='ryoshu'||d.typeKey==='ryoshu_engo');
   let inner='';
   const header=`
@@ -1811,13 +1813,13 @@ function docHTML(d){
       ${d.payMode==='引落し'?`
       <div class="bank">
         <div><b>【お支払い方法】</b> お支払いは口座振替（自動引落し）です。ご登録の口座から自動で引き落とされます。</div>
-        ${dueD?`<div style="margin-top:4px"><b>${esc(d.dueLabel||'引落し日')}：</b>${esc(fmtWareki(dueD))}</div>`:''}
+        ${dueD2?`<div style="margin-top:4px"><b>${esc(d.dueLabel||'引落し日')}：</b>${esc(fmtWareki(dueD2))}</div>`:''}
       </div>`:(d.showBank?`
       <div class="bank">
         <div>${esc(b.notice)}</div>
         <div style="margin-top:6px"><b>【お振込先】</b> ${esc(b.bank)}　${esc(b.acc)}　${esc(b.holder)}</div>
-        ${dueD?`<div><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD))}</div>`:''}
-      </div>`:(dueD?`<div class="bank"><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD))}</div>`:''))}
+        ${dueD2?`<div><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD2))}</div>`:''}
+      </div>`:(dueD2?`<div class="bank"><b>${esc(d.dueLabel||'お支払期限')}：</b>${esc(fmtWareki(dueD2))}</div>`:''))}
       ${d.notes&&d.notes.length?`<div class="notes"><b>【備考】</b>${d.notes.map(n=>`<div>・${esc(n)}</div>`).join('')}</div>`:''}`;
   }
   return `<div class="doc">${inner}</div>`;
