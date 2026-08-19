@@ -660,7 +660,8 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     <label class="flexwrap" style="margin-top:10px"><input type="checkbox" id="dm_showBank" style="width:auto" onchange="renderDocPreview()"> 振込先を表示する</label>
     <div class="modal-actions">
       <button class="btn" onclick="saveAndPreview()">保存してプレビュー</button>
-      <button class="btn" onclick="saveAndPrint()">🖨 保存して印刷 / PDF</button>
+      <button class="btn" onclick="saveAndPrint()">🖨 保存して印刷</button>
+      <button class="btn" onclick="saveAndPdf()">📄 保存してPDF</button>
       <button class="btn sec" onclick="renderDocPreview()">プレビュー更新</button>
       <button class="btn sec" onclick="closeModal('docModal')">閉じる</button>
     </div>
@@ -673,7 +674,8 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <div class="modal">
     <div id="view_preview"></div>
     <div class="modal-actions">
-      <button class="btn" onclick="doPrint()">🖨 印刷 / PDF保存</button>
+      <button class="btn" onclick="doPrint()">🖨 印刷</button>
+      <button class="btn" onclick="doPdf()">📄 PDF保存</button>
       <button class="btn sec" onclick="closeModal('viewModal')">閉じる</button>
     </div>
   </div>
@@ -2091,6 +2093,42 @@ function doPrint(){
   window.print();
   setTimeout(restore,3000);
 }
+/* ===== PDFを直接ダウンロード（印刷ダイアログを使わない） ===== */
+function loadHtml2pdf(){
+  if(window.html2pdf)return Promise.resolve(window.html2pdf);
+  return new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload=()=>res(window.html2pdf);
+    s.onerror=()=>rej(new Error('PDFライブラリの読み込みに失敗しました（ネット接続をご確認ください）'));
+    document.head.appendChild(s);
+  });
+}
+async function savePdfDoc(d){
+  if(!d)return;
+  // PDF保存＝履歴にも保存：まだ履歴に無ければ保存する
+  if(d.id&&!state.documents.some(x=>x.id===d.id)){
+    if(!d.number)d.number=ensureNumber(d,true);
+    d.savedAt=nowStamp();
+    state.documents.push(JSON.parse(JSON.stringify(d)));
+    saveLocal();if(github.connected)pushNow();
+    try{renderHistory();}catch(e){}
+  }
+  let lib;
+  try{lib=await loadHtml2pdf();}catch(e){alert(e.message||'PDFライブラリを読み込めませんでした。');return;}
+  const holder=document.createElement('div');
+  holder.style.position='fixed';holder.style.left='-10000px';holder.style.top='0';holder.style.background='#fff';holder.style.zIndex='-1';
+  holder.innerHTML=docHTML(d);
+  const el=holder.querySelector('.doc')||holder;
+  el.style.width='190mm';el.style.margin='0';el.style.boxShadow='none';
+  document.body.appendChild(holder);
+  const opt={margin:[6,6,6,6],filename:docFileName(d)+'.pdf',image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','avoid-all']}};
+  try{ await lib().set(opt).from(el).save(); }
+  catch(e){ alert('PDFの作成に失敗しました：'+(e&&e.message||e)); }
+  finally{ if(holder.parentNode)holder.parentNode.removeChild(holder); }
+}
+function doPdf(){ savePdfDoc(window._printDoc||currentDoc); }
+function saveAndPdf(){ if(saveAndPreview(true)===false)return; window._printDoc=currentDoc; savePdfDoc(currentDoc); }
 
 /* ============================================================
    設定フォーム
