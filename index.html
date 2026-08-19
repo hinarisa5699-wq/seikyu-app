@@ -1775,7 +1775,7 @@ function docHTML(d){
           <div>${esc(c.corp)}</div>
           <div>${esc(c.addr)}</div>
           <div>${esc(c.tel)}</div>
-          <div class="stamp-area"><span>${esc(c.ceo)}</span><span class="stamp">印</span></div>
+          <div class="stamp-area"><span>${esc(c.ceo)}</span>${isReceipt?'<span class="stamp">印</span>':''}</div>
         </div>
       </div>
     </div>`;
