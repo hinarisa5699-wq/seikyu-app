@@ -1827,7 +1827,7 @@ function docHTML(d){
       ${(['seikyu_yachin','honnin','engo','gaibu_meal','zantei'].includes(d.typeKey)&&d.month)?`<div style="text-align:center;font-size:15px;font-weight:700;letter-spacing:2px;margin:2px 0 8px">${esc(ymLabel(d.month))}</div>`:''}
       ${header}
       ${d.lead?`<div class="lead">${esc(d.lead)}</div>`:''}
-      <div class="bigsum"><span>${d.docTitle.includes('見積')?'お見積金額（税込）':'ご請求金額（税込）'}</span><span class="n">${yen(d.total)}</span></div>
+      <div class="bigsum"><span>${(d.docTitle||'').replace(/\s/g,'').indexOf('見積')>=0?'お見積金額（税込）':'ご請求金額（税込）'}</span><span class="n">${yen(d.total)}</span></div>
       <table class="lines">
         <thead><tr><th>項　目</th><th>単価/月額</th><th>数量</th><th>基準</th><th>金額(円)</th><th>摘　要</th></tr></thead>
         <tbody>${rows}
