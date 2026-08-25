@@ -2142,7 +2142,10 @@ function docFileName(d){
   const ym=d.month||(d.issue||'').slice(0,7);
   const ymTxt=ym?ymLabel(ym):'';
   const clean=s=>String(s||'').replace(/[\\\/:*?"<>|／]/g,'').replace(/\s+/g,'');
-  const type=clean(d.typeLabel||d.docTitle);
+  const dt=clean(d.docTitle);   // 請求書/見積書/明細書/領収書（表示中のタイトル）
+  const tl=clean(d.typeLabel);  // 具体的な種類名
+  // 表示中のタイトルの種類がtypeLabelに含まれていればtypeLabel（具体的）、違えばタイトル優先
+  const type=(dt&&tl.indexOf(dt)<0)?dt:(tl||dt);
   const name=clean(d.residentName||d.to);
   return [ymTxt,type,name].filter(Boolean).join('_')||'書類';
 }
