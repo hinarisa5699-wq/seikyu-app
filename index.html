@@ -657,7 +657,10 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <thead><tr><th style="width:34px">計</th><th>項目</th><th style="width:90px">単価/月額</th><th style="width:64px">数量</th><th style="width:70px">基準</th><th style="width:100px">金額</th><th>摘要</th><th style="width:34px"></th></tr></thead>
       <tbody></tbody>
     </table>
-    <div class="row-actions"><button class="btn sec sm" onclick="addItemRow()">＋ 行を追加</button></div>
+    <div class="row-actions" style="align-items:center">
+      <select id="dm_preset" onchange="addPresetRow(this.value);this.value=''" style="max-width:280px"><option value="">＋ 定型項目を選んで追加…</option></select>
+      <button class="btn sec sm" onclick="addItemRow()">＋ 空の行を追加</button>
+    </div>
     <div class="totalbar">合計（税込）<span class="amt" id="dm_total">¥0</span></div>
     <label>備考</label><textarea id="dm_notes"></textarea>
     <label class="flexwrap" style="margin-top:10px"><input type="checkbox" id="dm_showBank" style="width:auto" onchange="renderDocPreview()"> 振込先を表示する</label>
@@ -1662,6 +1665,7 @@ function fillDocForm(){
   $('dm_items').closest ? null : null;
   document.querySelector('#dm_items').parentElement.style.display=isR?'none':'';
   if(isR){$('dm_tadashi').value=d.tadashi||'';$('dm_receiptAmt').value=d.receiptAmt||'';}
+  buildPresetOptions();
   renderItemRows();
 }
 function renderItemRows(){
@@ -1694,6 +1698,39 @@ function itChange(i,k,v){
   updateTotal();renderItemRows();renderDocPreview();
 }
 function addItemRow(){currentDoc.items.push({name:'',tanka:'',qty:'',kijun:'',amount:0,tekiyo:'',inc:true});renderItemRows();renderDocPreview();}
+// 定型項目（設定の単価から動的に生成・金額つきで選択）
+function presetList(){
+  const p=state.settings.prices,m=state.settings.meals;
+  return [
+    {k:'rent_n',name:'家賃',tanka:+p.rent_n,unit:'month',tekiyo:'住宅使用料（月額・非課税）',lab:'家賃（通常）'},
+    {k:'rent_s',name:'家賃',tanka:+p.rent_s,unit:'month',tekiyo:'住宅使用料（月額・非課税）',lab:'家賃（生保）'},
+    {k:'kyo_n',name:'共益費',tanka:+p.kyo_n,unit:'month',tekiyo:'共用部維持管理費（月額）',lab:'共益費（通常）'},
+    {k:'sup',name:'生活支援サービス費',tanka:+p.sup_n,unit:'month',tekiyo:'安否確認等サービス（月額・課税）',lab:'生活支援サービス費'},
+    {k:'asa',name:'朝食',tanka:+m.asa,unit:'meal',kj:'食',tekiyo:'',lab:'朝食'},
+    {k:'hiru',name:'昼食',tanka:+m.hiru,unit:'meal',kj:'食',tekiyo:'',lab:'昼食'},
+    {k:'yoru',name:'夕食',tanka:+m.yoru,unit:'meal',kj:'食',tekiyo:'',lab:'夕食'},
+    {k:'oya',name:'おやつ',tanka:+m.oya,unit:'meal',kj:'食',tekiyo:'',lab:'おやつ'},
+    {k:'haizen',name:'配膳下膳',tanka:+m.asaH||150,unit:'meal',kj:'回',tekiyo:'',lab:'配膳下膳'},
+    {k:'bento',name:'弁当',tanka:200,unit:'meal',kj:'食',tekiyo:'',lab:'弁当'},
+    {k:'nyu',name:'入居金・敷金',tanka:+p.nyu,unit:'once',tekiyo:'入居時一時金（初回のみ・非課税）',lab:'入居金・敷金'},
+    {k:'kasai',name:'火災保険料',tanka:+p.kasai,unit:'once',tekiyo:'損保ジャパン（3年分一括・非課税）',lab:'火災保険料'},
+    {k:'kounetsu',name:'ガス・水道・電気（概算）',tanka:+p.kounetsu,unit:'once',tekiyo:'光熱費の概算（実費精算）',lab:'ガス・水道・電気（概算）'},
+    {k:'keitai',name:'光熱費・携帯電話',tanka:(p.keitai!=null?+p.keitai:6500),unit:'once',tekiyo:'光熱費・携帯電話（概算・実費精算）',lab:'光熱費・携帯電話'}
+  ];
+}
+function buildPresetOptions(){
+  const sel=$('dm_preset');if(!sel)return;
+  sel.innerHTML='<option value="">＋ 定型項目を選んで追加…</option>'+presetList().map(x=>`<option value="${x.k}">${esc(x.lab)}　${num(x.tanka)}円</option>`).join('');
+}
+function addPresetRow(k){
+  if(!k||!currentDoc)return;
+  const x=presetList().find(y=>y.k===k);if(!x)return;
+  let row;
+  if(x.unit==='meal')row={name:x.name,tanka:x.tanka,qty:1,kijun:x.kj||'食',amount:x.tanka,tekiyo:x.tekiyo||'',inc:true};
+  else if(x.unit==='once')row={name:x.name,tanka:x.tanka,qty:'－',kijun:'－',amount:x.tanka,tekiyo:x.tekiyo||'',inc:true};
+  else row={name:x.name,tanka:x.tanka,qty:'1ヶ月',kijun:'－',amount:x.tanka,tekiyo:x.tekiyo||'',inc:true};
+  currentDoc.items.push(row);renderItemRows();renderDocPreview();
+}
 function delItemRow(i){currentDoc.items.splice(i,1);renderItemRows();renderDocPreview();}
 function updateTotal(){currentDoc.total=currentDoc.items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);$('dm_total').textContent=yen(currentDoc.total);}
 
