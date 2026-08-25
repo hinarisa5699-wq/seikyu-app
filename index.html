@@ -639,8 +639,11 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <div><label>ご担当（任意）</label><input id="dm_tanto"></div>
     </div>
     <div class="grid3">
+      <div><label>書類の種類</label><select id="dm_docType" onchange="onDocTypeChange()"><option value="請求書">請求書</option><option value="見積書">見積書</option><option value="明細書">明細書</option></select></div>
       <div><label>発行日</label><input type="date" id="dm_issue"></div>
       <div><label>番号</label><input id="dm_number"></div>
+    </div>
+    <div class="grid3">
       <div><label id="dm_dueLabel">お支払期限</label><input type="date" id="dm_due"></div>
     </div>
     <div id="dm_receiptExtra" style="display:none">
@@ -1649,6 +1652,12 @@ function fillDocForm(){
   $('dm_notes').value=(d.notes||[]).join('\n');
   $('dm_showBank').checked=!!d.showBank;
   const isR=(d.typeKey==='ryoshu'||d.typeKey==='ryoshu_engo');
+  // 書類の種類セレクト（領収書以外で表示）
+  if($('dm_docType')){
+    const dt=(d.docTitle||'').replace(/\s/g,'');
+    $('dm_docType').value=(dt==='見積書'?'見積書':(dt==='明細書'?'明細書':'請求書'));
+    $('dm_docType').closest('div').style.display=isR?'none':'';
+  }
   $('dm_receiptExtra').style.display=isR?'':'none';
   $('dm_items').closest ? null : null;
   document.querySelector('#dm_items').parentElement.style.display=isR?'none':'';
@@ -1694,8 +1703,23 @@ function collectDocForm(){
   d.issue=$('dm_issue').value;d.number=$('dm_number').value;d.due=$('dm_due').value;
   d.notes=$('dm_notes').value.split('\n').filter(x=>x.trim()!=='');
   d.showBank=$('dm_showBank').checked;
-  if(d.typeKey==='ryoshu'||d.typeKey==='ryoshu_engo'){d.tadashi=$('dm_tadashi').value;d.receiptAmt=+$('dm_receiptAmt').value||0;d.total=d.receiptAmt;}
+  const isR=(d.typeKey==='ryoshu'||d.typeKey==='ryoshu_engo');
+  if(!isR&&$('dm_docType')){applyDocType(d,$('dm_docType').value);}
+  if(isR){d.tadashi=$('dm_tadashi').value;d.receiptAmt=+$('dm_receiptAmt').value||0;d.total=d.receiptAmt;}
   else updateTotal();
+}
+// 書類の種類（請求書／見積書／明細書）を書類に反映
+function applyDocType(d,kind){
+  const map={'請求書':'請 求 書','見積書':'見 積 書','明細書':'明 細 書'};
+  d.docTitle=map[kind]||'請 求 書';
+  d.titleMode=(kind==='明細書')?'明細書':'請求書';
+  d.docKind=kind;
+}
+function onDocTypeChange(){
+  if(!currentDoc)return;
+  applyDocType(currentDoc,$('dm_docType').value);
+  $('dmTitle').textContent=currentDoc.docTitle.replace(/ /g,'')+'の作成 — '+currentDoc.residentName+' 様';
+  renderDocPreview();
 }
 function saveAndPreview(silent){
   // 宛名ちがい防止：開いている書類の入居者と、作成画面で選んでいる入居者が違うと警告
