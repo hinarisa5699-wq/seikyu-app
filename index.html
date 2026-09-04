@@ -305,41 +305,12 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <div><label>対象月</label><input type="month" id="bc_month"></div>
         <div><label>入居者</label><select id="bc_resident"><option value="">— 選択 —</option></select></div>
       </div>
-      <details style="margin-top:10px">
-        <summary style="cursor:pointer;font-weight:600">月途中で区分（生保⇄通常）が変わる方の日割り設定</summary>
-        <label style="margin-top:8px"><input type="checkbox" id="bc_split" style="width:auto"> 期間・区分を指定して日割りする（家賃・共益費・生活支援サービス費）</label>
-        <div class="grid3" style="margin-top:6px">
-          <div><label>期間1 開始</label><input type="date" id="bc_s1s"></div>
-          <div><label>期間1 終了</label><input type="date" id="bc_s1e"></div>
-          <div><label>期間1 区分</label><select id="bc_s1k"><option value="通常">通常</option><option value="生保">生保</option></select></div>
-        </div>
-        <div class="grid3" style="margin-top:6px">
-          <div><label>期間2 開始（任意）</label><input type="date" id="bc_s2s"></div>
-          <div><label>期間2 終了</label><input type="date" id="bc_s2e"></div>
-          <div><label>期間2 区分</label><select id="bc_s2k"><option value="生保">生保</option><option value="通常">通常</option></select></div>
-        </div>
-        <div class="hint">例：新城様7月＝期間1「7/1〜7/2・通常」、期間2「7/3〜7/31・生保」。生保＝家賃53,700／共益費0／生活支援30,000、通常＝家賃70,000／共益費30,000／生活支援30,000（設定の単価を使用・各期間で日割り）。食費はCSVがあれば自動で入ります。<br>※生保期間の家賃は本来「援護課あて」です。この請求書には計算として載せていますので、援護課へ別途出す場合は作成後にその行を外してください。</div>
-      </details>
+      
       <div class="row-actions"><button class="btn" onclick="createOneInvoice()">この入居者の請求書を作成（内容確認へ）</button></div>
       <div style="margin-top:12px"><b>取り込んだ月</b><div id="mc_saved" class="muted" style="margin-top:4px">まだ取り込まれた月はありません。</div></div>
     </div>
 
-    <div class="card">
-      <h3>⑤ 差額精算（前払いの清算）</h3>
-      <p class="muted">前払い（暫定）で請求した月について、<b>実績（CSV・通所日反映後）の請求総額</b>と<b>前払い暫定の請求総額</b>の差を出します。差額は<b>翌月のご本人あて請求書</b>に「差額精算金」として1行入れられます。</p>
-      <div class="grid2">
-        <div><label>入居者</label><select id="se_resident"><option value="">— 選択 —</option></select></div>
-        <div><label>精算する月（前払いした月）</label><input type="month" id="se_month"></div>
-      </div>
-      <div class="row-actions">
-        <button class="btn" onclick="se_calc()">差額を計算する</button>
-      </div>
-      <div id="se_result" class="muted" style="margin-top:8px"></div>
-      <div class="row-actions" id="se_applyRow" style="display:none">
-        <button class="btn" onclick="se_apply()">翌月のご本人あて請求書に「差額精算金」を入れて作成</button>
-      </div>
-      <div class="hint">実績は、保存済みの「ご本人あて請求書」があればその総額、なければCSV・通所日から試算します。差額＝実績−前払い（プラス＝不足の追加請求／マイナス＝払い過ぎの減額）。金額は作成画面で確認・修正できます。</div>
-    </div>
+    
   </section>
 
   <!-- HISTORY -->
@@ -1161,16 +1132,7 @@ function createOneInvoice(){
   if($('createResident'))$('createResident').value=rid;
   if($('createMoveIn'))$('createMoveIn').value=r.movein||'';
   if($('createIssue'))$('createIssue').value=$('createIssue').value||todayStr();
-  if($('bc_split')&&$('bc_split').checked){
-    const s1s=($('bc_s1s')||{}).value, s1e=($('bc_s1e')||{}).value;
-    if(!s1s||!s1e){alert('期間1の開始日・終了日を入れてください。');return;}
-    const segs=[{start:s1s,end:s1e,kubun:($('bc_s1k')||{}).value||'通常'}];
-    const s2s=($('bc_s2s')||{}).value, s2e=($('bc_s2e')||{}).value;
-    if(s2s&&s2e)segs.push({start:s2s,end:s2e,kubun:($('bc_s2k')||{}).value||'生保'});
-    currentDoc=buildSplitDoc(r,ym,segs);
-  }else{
-    currentDoc=buildDoc(r,typeKey);
-  }
+  currentDoc=buildDoc(r,typeKey);
   currentDoc.number=ensureNumber(currentDoc,false);
   if($('createMonth'))$('createMonth').value=pm; if($('createResident'))$('createResident').value=pr; if($('createMoveIn'))$('createMoveIn').value=pmv; if($('createIssue'))$('createIssue').value=pi;
   fillDocForm();openModal('docModal');renderDocPreview();
@@ -1214,7 +1176,6 @@ function renderMealCsv(){
   fillDaycareResident();
   if(_pdfDaycare&&_pdfDaycare.ym){$('dc_pdfCard').style.display='';renderPdfDaycarePreview(_pdfDaycare,_pdfDaycare._fname||'');if($('dc_month')&&!$('dc_month').value)$('dc_month').value=_pdfDaycare.ym;}
   renderDaycareCal();
-  fillSettleResident();
   fillBcResident();
   if($('bc_month')&&!$('bc_month').value){const ks=Object.keys(state.mealData||{}).sort();if(ks.length)$('bc_month').value=ks[ks.length-1];else if($('mc_month')&&$('mc_month').value)$('bc_month').value=$('mc_month').value;}
 }
@@ -1408,14 +1369,14 @@ function importMealLines(p,label){
 /* ============================================================
    明細生成ロジック
    ============================================================ */
-function mealLines(r,count,label){
-  const m=state.settings.meals;const days=count;
+function mealLines(r,count,label,dcDays){
+  const m=state.settings.meals;const days=count;const lunchDays=Math.max(0,count-(+dcDays||0));
   const rows=[];
-  const add=(nm,meal,haizen,force)=>{const t=(+meal||0)+(+haizen||0);if(t>0||force)rows.push({name:nm,tanka:t,qty:days,kijun:'回',amount:t*days,tekiyo:(haizen>0?`食事${meal}円＋配膳${haizen}円`:`1回 ${meal}円`),inc:true});};
+  const add=(nm,meal,haizen,force,cnt)=>{const q=(cnt==null?days:cnt);const t=(+meal||0)+(+haizen||0);if((t>0||force)&&q>0)rows.push({name:nm,tanka:t,qty:q,kijun:'回',amount:t*q,tekiyo:(haizen>0?`食事${meal}円＋配膳${haizen}円`:`1回 ${meal}円`),inc:true});};
   add('朝食'+(label?`（${label}）`:''),m.asa,m.asaH,m.asaReq!==false); // 朝食は必須
-  add('昼食'+(label?`（${label}）`:''),m.hiru,m.hiruH,false);
+  add('昼食'+(label?`（${label}）`:''),m.hiru,m.hiruH,false,lunchDays);
   add('夕食'+(label?`（${label}）`:''),m.yoru,m.yoruH,false);
-  add('おやつ'+(label?`（${label}）`:''),m.oya,m.oyaH,false);
+  add('おやつ'+(label?`（${label}）`:''),m.oya,m.oyaH,false,lunchDays);
   return rows;
 }
 function kounetsuLine(r,type){
@@ -1493,7 +1454,7 @@ function buildDoc(r,typeKey){
     const mealDays=partial?daysMove:dim;
     let mImp=getMealImport(r.name,monthStr);
     if(mImp)mImp=adjustMealByDaycare(mImp,getDaycareDays(r.id,monthStr));
-    const mealItems=mImp?importMealLines(mImp):mealLines(r,mealDays);
+    const mealItems=mImp?importMealLines(mImp):mealLines(r,mealDays,'',getDaycareDays(r.id,monthStr).length);
     const housing=partial?[rentLine(daysMove),kyoLine(daysMove)]:[rentFull(),kyoFull()];
     const supItem=partial?supLine(daysMove):supFull();
     items=[...housing,supItem,...mealItems,kounetsuLine(r,'seikyu_yachin')];
@@ -1525,7 +1486,7 @@ function buildDoc(r,typeKey){
     const mealDays=partial?daysMove:dim;
     let mImpH=getMealImport(r.name,monthStr);
     if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDaycareDays(r.id,monthStr));
-    const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays);
+    const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays,'',getDaycareDays(r.id,monthStr).length);
     items=[partial?supLine(daysMove):supFull(), ...mealItemsH];
     if(kyo>0)items.unshift(partial?kyoLine(daysMove):kyoFull());
     items.push(kounetsuLine(r,'honnin'));
@@ -1557,7 +1518,7 @@ function buildDoc(r,typeKey){
     const mealDays=daysInMonth(monthD||issue);
     let mImpG=getMealImport(r.name,monthStr);
     if(mImpG)mImpG=adjustMealByDaycare(mImpG,getDaycareDays(r.id,monthStr));
-    items=mImpG?importMealLines(mImpG):mealLines(r,mealDays);
+    items=mImpG?importMealLines(mImpG):mealLines(r,mealDays,'',getDaycareDays(r.id,monthStr).length);
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
     notes=['本請求はデイサービスご利用時の食事代です（入居に伴う家賃・共益費等はありません）。',
       '食費は非課税。',
