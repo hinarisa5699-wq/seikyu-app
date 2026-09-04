@@ -307,7 +307,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       </div>
       
       <div class="row-actions"><button class="btn" onclick="createOneInvoice()">この入居者の請求書を作成（内容確認へ）</button></div>
-      <div style="margin-top:12px"><b>取り込んだ月</b><div id="mc_saved" class="muted" style="margin-top:4px">まだ取り込まれた月はありません。</div></div>
+      <div style="margin-top:12px"><b>取り込んだ月</b><div id="mc_saved" class="muted" style="margin-top:4px">まだ取り込まれた月はありません。</div></div><div style="margin-top:12px"><b>ファイル取込履歴（日時）</b><div id="importLogList" class="muted" style="margin-top:4px">まだ取込履歴はありません。</div></div>
     </div>
 
     
@@ -679,6 +679,8 @@ function defaultState(){return{
   documents:[],
   mealData:{},
   daycare:{},
+  dcMeal:{},
+  importLog:[],
   mailing:{},
   counters:{byYm:{},batch:{}}
 };}
@@ -1064,12 +1066,12 @@ function saveMealImport(){
   if(!mcPreview){alert('先にCSVを取り込んでください。');return;}
   const ym=$('mc_month').value||mcPreview.ym;
   if(!ym){alert('対象月を選んでください。');return;}
-  state.mealData[ym]={importedAt:todayStr(),ym,people:JSON.parse(JSON.stringify(mcPreview.people))};
+  state.mealData[ym]={importedAt:nowStamp(),ym,people:JSON.parse(JSON.stringify(mcPreview.people))};addImportLog('csv',(mcPreview&&mcPreview._fname)||'CSV',[ym]);
   saveLocal();if(github.connected){pushNow();} // すぐクラウド保存（再読込しても消えない）
   alert('保存しました。'+ym+' の請求書・見積書で、この食事代が自動で反映されます。');
   renderSavedMeals();
 }
-function renderSavedMeals(){
+function renderSavedMeals(){renderImportLog();
   const keys=Object.keys(state.mealData||{}).sort().reverse();
   const el=$('mc_saved');
   if(!keys.length){el.innerHTML='まだ取り込まれた月はありません。';return;}
@@ -1181,6 +1183,23 @@ function renderMealCsv(){
 }
 /* ===== デイサービス利用日カレンダー ===== */
 function getDaycareDays(rid,ym){return (state.daycare&&state.daycare[ym]&&state.daycare[ym][rid])?state.daycare[ym][rid].slice():[];}
+function getDcMeal(rid,ym){
+  var m=(state.dcMeal&&state.dcMeal[ym]&&state.dcMeal[ym][rid])?state.dcMeal[ym][rid]:null;
+  if(m)return {hiru:(m.hiru||[]).map(Number),oya:(m.oya||[]).map(Number)};
+  var d=getDaycareDays(rid,ym);
+  return {hiru:d.slice(),oya:d.slice()};
+}
+function addImportLog(kind,fname,months){
+  state.importLog=state.importLog||[];
+  state.importLog.unshift({ts:nowStamp(),kind:kind,fname:fname||'',months:months||[]});
+  if(state.importLog.length>100)state.importLog.length=100;
+}
+function renderImportLog(){
+  var el=$('importLogList'); if(!el)return;
+  var log=state.importLog||[];
+  if(!log.length){el.innerHTML='まだ取込履歴はありません。';return;}
+  el.innerHTML=log.map(function(x){return '<div style="padding:3px 0">'+esc(x.ts)+'　<b>'+(x.kind==='pdf'?'デイPDF':'CSV')+'</b>　'+esc(x.fname||'')+((x.months&&x.months.length)?'　['+esc(x.months.join('、'))+']':'')+'</div>';}).join('');
+}
 function fillDaycareResident(){const sel=$('dc_resident');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}（${esc(r.kubun)}${r.room?'・'+esc(r.room):''}）</option>`).join('');sel.value=cur;}
 function renderDaycareCal(){
   const box=$('dc_cal');if(!box)return;
@@ -1233,23 +1252,31 @@ async function pdfToLines(buf){
   return pages;
 }
 function parseDaycareFromLines(lines){
-  let ym=null;
-  // サービス月「令和X年Y月分」を優先（請求年月と区別）
-  lines.forEach(l=>{const m=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*分/);if(m&&!ym){ym=(2018+parseInt(m[1],10))+'-'+pad2(parseInt(m[2],10));}});
-  if(!ym)lines.forEach(l=>{const m=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月/);if(m&&!ym){ym=(2018+parseInt(m[1],10))+'-'+pad2(parseInt(m[2],10));}});
-  const norm=s=>String(s||'').replace(/[\s　]/g,'');
-  const resList=state.residents.map(r=>({r,nn:norm(r.name)})).filter(x=>x.nn);
-  const found={}; let current=null;
-  lines.forEach(l=>{
-    const ln=norm(l);
-    resList.forEach(x=>{ if(ln.indexOf(x.nn+'様')>=0) current=x.r; });
-    if(current && l.indexOf('地域通所介護')>=0){
-      const dm=l.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
-      if(dm){const day=parseInt(dm[2],10);if(day>=1&&day<=31){(found[current.id]=found[current.id]||new Set()).add(day);}}
-    }
+  var norm=function(s){return String(s||'').replace(/[\s　]/g,'');};
+  var resList=state.residents.map(function(r){return {r:r,nn:norm(r.name)};}).filter(function(x){return x.nn;});
+  var curYm=null,current=null;var bag={};
+  var getB=function(ym,rid){var k=ym+'|'+rid;if(!bag[k])bag[k]={hiru:new Set(),oya:new Set(),attend:new Set()};return bag[k];};
+  lines.forEach(function(l){
+    var mm=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*分/);
+    if(mm){curYm=(2018+parseInt(mm[1],10))+'-'+pad2(parseInt(mm[2],10));}
+    var ln=norm(l);
+    resList.forEach(function(x){if(ln.indexOf(x.nn+'様')>=0)current=x.r;});
+    if(!current||!curYm)return;
+    var dm=l.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+    if(!dm)return;
+    var day=parseInt(dm[2],10);if(!(day>=1&&day<=31))return;
+    var b=getB(curYm,current.id);
+    if(l.indexOf('おやつ代')>=0)b.oya.add(day);
+    else if(l.indexOf('昼食代')>=0)b.hiru.add(day);
+    else if(l.indexOf('地域通所介護')>=0)b.attend.add(day);
   });
-  const per=Object.keys(found).map(rid=>({residentId:rid,name:(state.residents.find(r=>r.id===rid)||{}).name,days:Array.from(found[rid]).sort((a,b)=>a-b)}));
-  return {ym,per};
+  var entries=Object.keys(bag).map(function(k){
+    var i=k.indexOf('|');var ym=k.slice(0,i),rid=k.slice(i+1);var b=bag[k];
+    var rr=state.residents.find(function(r){return r.id===rid;})||{};
+    return {ym:ym,residentId:rid,name:rr.name,hiru:Array.from(b.hiru).sort(function(a,b){return a-b;}),oya:Array.from(b.oya).sort(function(a,b){return a-b;}),attend:Array.from(b.attend).sort(function(a,b){return a-b;})};
+  }).filter(function(e){return e.hiru.length||e.oya.length||e.attend.length;});
+  var months=Array.from(new Set(entries.map(function(e){return e.ym;}))).sort();
+  return {entries:entries,months:months,ym:months[months.length-1]||null};
 }
 async function handleDaycarePdf(f){
   const card=$('dc_pdfCard');
@@ -1258,7 +1285,7 @@ async function handleDaycarePdf(f){
     const buf=await f.arrayBuffer();
     const lines=await pdfToLines(buf);
     const res=parseDaycareFromLines(lines);
-    res._fname=f.name;
+    res._fname=f.name;res.importedAt=nowStamp();
     _pdfDaycare=res;
     saveImportLS(); // 端末に保存（再読込しても消えない）
     renderPdfDaycarePreview(res,f.name);
@@ -1267,23 +1294,36 @@ async function handleDaycarePdf(f){
   }
 }
 function renderPdfDaycarePreview(res,fname){
-  $('dc_pdfYm').textContent=res.ym||'月が読めませんでした';
-  if(!res.per.length){$('dc_pdfMsg').textContent='通所介護の日付を持つ登録入居者が見つかりませんでした（'+esc(fname||'')+'）。氏名が登録と一致しているかご確認ください。';$('dc_pdfList').innerHTML='';return;}
-  $('dc_pdfMsg').innerHTML='<b>'+esc(fname||'')+'</b> から '+res.per.length+' 名の通所介護日を読み取りました。内容を確認して反映してください。';
-  $('dc_pdfList').innerHTML='<table class="data"><thead><tr><th>入居者</th><th>通所日数</th><th>通所日</th></tr></thead><tbody>'+
-    res.per.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.days.length}日</td><td>${p.days.join('・')}</td></tr>`).join('')+'</tbody></table>';
+  var entries=(res&&res.entries)?res.entries:[];
+  $('dc_pdfYm').textContent=(res&&res.months&&res.months.length)?res.months.join('、'):((res&&res.ym)?res.ym:'月が読めませんでした');
+  if(!entries.length){$('dc_pdfMsg').textContent='通所介護日を持つ登録入居者が見つかりませんでした（'+esc(fname||'')+'）。氏名が登録と一致しているかご確認ください。';$('dc_pdfList').innerHTML='';return;}
+  var stamp=(res&&res.importedAt)?res.importedAt:'';
+  $('dc_pdfMsg').innerHTML='<b>'+esc(fname||'')+'</b>'+(stamp?'（取込日時 '+esc(stamp)+'）':'')+' から '+entries.length+' 件を読み取りました。内容を確認して反映してください。';
+  var byYm={};entries.forEach(function(e){if(!byYm[e.ym])byYm[e.ym]=[];byYm[e.ym].push(e);});
+  var html='';
+  Object.keys(byYm).sort().forEach(function(ym){
+    html+='<div style="margin-top:8px"><b>'+esc(ym)+'</b></div>';
+    html+='<table class="data"><thead><tr><th>入居者</th><th>昼食(除外)</th><th>おやつ(除外)</th><th>通所日</th></tr></thead><tbody>'+byYm[ym].map(function(e){return '<tr><td>'+esc(e.name||'(未登録)')+'</td><td>'+e.hiru.length+'日 <span class="muted">'+e.hiru.join('・')+'</span></td><td>'+e.oya.length+'日 <span class="muted">'+e.oya.join('・')+'</span></td><td>'+e.attend.length+'日</td></tr>';}).join('')+'</tbody></table>';
+  });
+  $('dc_pdfList').innerHTML=html;
 }
 function applyPdfDaycare(){
-  if(!_pdfDaycare||!_pdfDaycare.ym){alert('反映できるデータがありません。月が読み取れませんでした。');return;}
-  const ym=_pdfDaycare.ym;
-  state.daycare=state.daycare||{};state.daycare[ym]=state.daycare[ym]||{};
-  _pdfDaycare.per.forEach(p=>{state.daycare[ym][p.residentId]=p.days.slice();});
-  const cnt=_pdfDaycare.per.length;
-  _pdfDaycare=null;saveImportLS(); // 反映済みなのでPDF結果はクリア（カレンダーに保存済み。CSVプレビューは残す）
-  persist();
-  if($('dc_month'))$('dc_month').value=ym;
-  fillDaycareResident();renderDaycareCal();
-  alert(ym+' の通所日を '+cnt+' 名分、カレンダーに反映しました。');
+  if(!_pdfDaycare||!_pdfDaycare.entries||!_pdfDaycare.entries.length){alert('反映できるデータがありません。');return;}
+  state.daycare=state.daycare||{};state.dcMeal=state.dcMeal||{};
+  var months={};
+  _pdfDaycare.entries.forEach(function(e){
+    if(!e.residentId)return;
+    if(e.attend&&e.attend.length){if(!state.daycare[e.ym])state.daycare[e.ym]={};state.daycare[e.ym][e.residentId]=e.attend.slice();}
+    if((e.hiru&&e.hiru.length)||(e.oya&&e.oya.length)){if(!state.dcMeal[e.ym])state.dcMeal[e.ym]={};state.dcMeal[e.ym][e.residentId]={hiru:e.hiru.slice(),oya:e.oya.slice()};}
+    months[e.ym]=(months[e.ym]||0)+1;
+  });
+  var mkeys=Object.keys(months).sort();
+  addImportLog('pdf',(_pdfDaycare._fname||'デイPDF'),mkeys);
+  var cnt=_pdfDaycare.entries.length;var ms=mkeys.join('、');
+  _pdfDaycare=null;saveImportLS();persist();
+  if($('dc_month')&&mkeys.length)$('dc_month').value=mkeys[0];
+  fillDaycareResident();renderDaycareCal();renderSavedMeals();
+  alert(ms+' の通所日・食事を '+cnt+' 件反映しました。昼食・おやつを別々に除外します。');
   $('dc_pdfCard').style.display='none';
 }
 // ===== 差額精算（前払いの清算） =====
@@ -1325,21 +1365,21 @@ function se_apply(){
   alert(nextYm+' のご本人あて請求書に「差額精算金 '+(s.diff>=0?'＋':'')+yen(s.diff)+'」を入れました。内容を確認して保存してください。');
 }
 // 食事CSVの喫食データから通所日のお昼・おやつを除く
-function adjustMealByDaycare(p,dcDays){
-  if(!p||!dcDays||!dcDays.length)return p;
+function adjustMealByDaycare(p,dc){
+  if(!p||!dc)return p;var hiruDC,oyaDC;if(Array.isArray(dc)){hiruDC=dc;oyaDC=dc;}else{hiruDC=(dc.hiru||[]);oyaDC=(dc.oya||[]);}hiruDC=hiruDC.map(Number);oyaDC=oyaDC.map(Number);if(!hiruDC.length&&!oyaDC.length)return p;
   const q=JSON.parse(JSON.stringify(p));
   const hiruU=(p.hiruCount>0)?Math.round(p.hiruAmt/p.hiruCount):500;
   const oyaU=(p.oyaCount>0)?Math.round(p.oyaAmt/p.oyaCount):200;
-  const cut=(daysKey,cntKey,amtKey,unit)=>{
+  const cut=(daysKey,cntKey,amtKey,unit,dcArr)=>{
     const arr=(q[daysKey]||[]).map(Number);
-    const keep=arr.filter(d=>!dcDays.includes(d));
+    const keep=arr.filter(d=>!dcArr.includes(d));
     const removed=arr.length-keep.length;
     if(removed>0){q[daysKey]=keep.map(String);q[cntKey]=Math.max(0,(+q[cntKey]||0)-removed);q[amtKey]=Math.max(0,(+q[amtKey]||0)-removed*unit);}
   };
-  cut('hiruDays','hiruCount','hiruAmt',hiruU);
-  cut('oyaDays','oyaCount','oyaAmt',oyaU);
+  cut('hiruDays','hiruCount','hiruAmt',hiruU,hiruDC);
+  cut('oyaDays','oyaCount','oyaAmt',oyaU,oyaDC);
   q.total=(+q.asaAmt||0)+(+q.hiruAmt||0)+(+q.yoruAmt||0)+(+q.bentoAmt||0)+(+q.oyaAmt||0)+(+q.drinkAmt||0)+(+q.haizenAmt||0);
-  q._daycareCut=dcDays.length;
+  q._daycareCut=Math.max(hiruDC.length,oyaDC.length);
   return q;
 }
 
@@ -1369,14 +1409,14 @@ function importMealLines(p,label){
 /* ============================================================
    明細生成ロジック
    ============================================================ */
-function mealLines(r,count,label,dcDays){
-  const m=state.settings.meals;const days=count;const lunchDays=Math.max(0,count-(+dcDays||0));
+function mealLines(r,count,label,dcHiru,dcOya){
+  const m=state.settings.meals;const days=count;const hiruDays=Math.max(0,count-(+dcHiru||0));const oyaDays=Math.max(0,count-(+dcOya||0));
   const rows=[];
   const add=(nm,meal,haizen,force,cnt)=>{const q=(cnt==null?days:cnt);const t=(+meal||0)+(+haizen||0);if((t>0||force)&&q>0)rows.push({name:nm,tanka:t,qty:q,kijun:'回',amount:t*q,tekiyo:(haizen>0?`食事${meal}円＋配膳${haizen}円`:`1回 ${meal}円`),inc:true});};
   add('朝食'+(label?`（${label}）`:''),m.asa,m.asaH,m.asaReq!==false); // 朝食は必須
-  add('昼食'+(label?`（${label}）`:''),m.hiru,m.hiruH,false,lunchDays);
+  add('昼食'+(label?`（${label}）`:''),m.hiru,m.hiruH,false,hiruDays);
   add('夕食'+(label?`（${label}）`:''),m.yoru,m.yoruH,false);
-  add('おやつ'+(label?`（${label}）`:''),m.oya,m.oyaH,false,lunchDays);
+  add('おやつ'+(label?`（${label}）`:''),m.oya,m.oyaH,false,oyaDays);
   return rows;
 }
 function kounetsuLine(r,type){
@@ -1453,8 +1493,8 @@ function buildDoc(r,typeKey){
     const partial=moveInThisMonth&&daysMove<dim; // 月途中入居のみ日割り。まるまる1ヶ月は満額
     const mealDays=partial?daysMove:dim;
     let mImp=getMealImport(r.name,monthStr);
-    if(mImp)mImp=adjustMealByDaycare(mImp,getDaycareDays(r.id,monthStr));
-    const mealItems=mImp?importMealLines(mImp):mealLines(r,mealDays,'',getDaycareDays(r.id,monthStr).length);
+    if(mImp)mImp=adjustMealByDaycare(mImp,getDcMeal(r.id,monthStr));
+    const mealItems=mImp?importMealLines(mImp):mealLines(r,mealDays,'',getDcMeal(r.id,monthStr).hiru.length,getDcMeal(r.id,monthStr).oya.length);
     const housing=partial?[rentLine(daysMove),kyoLine(daysMove)]:[rentFull(),kyoFull()];
     const supItem=partial?supLine(daysMove):supFull();
     items=[...housing,supItem,...mealItems,kounetsuLine(r,'seikyu_yachin')];
@@ -1485,8 +1525,8 @@ function buildDoc(r,typeKey){
     const partial=moveInThisMonth&&daysMove<dim;
     const mealDays=partial?daysMove:dim;
     let mImpH=getMealImport(r.name,monthStr);
-    if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDaycareDays(r.id,monthStr));
-    const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays,'',getDaycareDays(r.id,monthStr).length);
+    if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDcMeal(r.id,monthStr));
+    const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays,'',getDcMeal(r.id,monthStr).hiru.length,getDcMeal(r.id,monthStr).oya.length);
     items=[partial?supLine(daysMove):supFull(), ...mealItemsH];
     if(kyo>0)items.unshift(partial?kyoLine(daysMove):kyoFull());
     items.push(kounetsuLine(r,'honnin'));
@@ -1517,8 +1557,8 @@ function buildDoc(r,typeKey){
     lead='下記のとおりご請求申し上げます。【請求区分：食事代（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
     const mealDays=daysInMonth(monthD||issue);
     let mImpG=getMealImport(r.name,monthStr);
-    if(mImpG)mImpG=adjustMealByDaycare(mImpG,getDaycareDays(r.id,monthStr));
-    items=mImpG?importMealLines(mImpG):mealLines(r,mealDays,'',getDaycareDays(r.id,monthStr).length);
+    if(mImpG)mImpG=adjustMealByDaycare(mImpG,getDcMeal(r.id,monthStr));
+    items=mImpG?importMealLines(mImpG):mealLines(r,mealDays,'',getDcMeal(r.id,monthStr).hiru.length,getDcMeal(r.id,monthStr).oya.length);
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
     notes=['本請求はデイサービスご利用時の食事代です（入居に伴う家賃・共益費等はありません）。',
       '食費は非課税。',
