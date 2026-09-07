@@ -1276,7 +1276,7 @@ function parseDaycareFromLines(lines){
     return {ym:ym,residentId:rid,name:rr.name,hiru:Array.from(b.hiru).sort(function(a,b){return a-b;}),oya:Array.from(b.oya).sort(function(a,b){return a-b;}),attend:Array.from(b.attend).sort(function(a,b){return a-b;})};
   }).filter(function(e){return e.hiru.length||e.oya.length||e.attend.length;});
   var months=Array.from(new Set(entries.map(function(e){return e.ym;}))).sort();
-  return {entries:entries,months:months,ym:months[months.length-1]||null};
+  var isKaigo=lines.some(function(l){return l.indexOf('介護記録')>=0;})&&!lines.some(function(l){return l.indexOf('昼食代')>=0||l.indexOf('おやつ代')>=0;});return {entries:entries,months:months,ym:months[months.length-1]||null,docHint:isKaigo?'kaigo':''};
 }
 async function handleDaycarePdf(f){
   const card=$('dc_pdfCard');
@@ -1296,7 +1296,7 @@ async function handleDaycarePdf(f){
 function renderPdfDaycarePreview(res,fname){
   var entries=(res&&res.entries)?res.entries:[];
   $('dc_pdfYm').textContent=(res&&res.months&&res.months.length)?res.months.join('、'):((res&&res.ym)?res.ym:'月が読めませんでした');
-  if(!entries.length){$('dc_pdfMsg').textContent='通所介護日を持つ登録入居者が見つかりませんでした（'+esc(fname||'')+'）。氏名が登録と一致しているかご確認ください。';$('dc_pdfList').innerHTML='';return;}
+  if(!entries.length){if(res&&res.docHint==='kaigo'){$('dc_pdfMsg').innerHTML='<b>これは「介護記録」PDFです。</b>このツールは<b>デイサービス利用料請求書</b>（利用明細に「昼食代・おやつ代」が載っているPDF）から取り込みます。請求書PDFを取り込んでください。<br><span class="muted">※介護記録は日付レイアウトの都合で請求回数と数件ずれるため、正確な二重防止には請求書をお使いください。</span>';}else{$('dc_pdfMsg').textContent='通所介護日を持つ登録入居者が見つかりませんでした（'+esc(fname||'')+'）。氏名が登録と一致しているかご確認ください。';}$('dc_pdfList').innerHTML='';return;}
   var stamp=(res&&res.importedAt)?res.importedAt:'';
   $('dc_pdfMsg').innerHTML='<b>'+esc(fname||'')+'</b>'+(stamp?'（取込日時 '+esc(stamp)+'）':'')+' から '+entries.length+' 件を読み取りました。内容を確認して反映してください。';
   var byYm={};entries.forEach(function(e){if(!byYm[e.ym])byYm[e.ym]=[];byYm[e.ym].push(e);});
