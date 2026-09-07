@@ -235,18 +235,18 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <section id="tab-mealcsv" style="display:none">
     <div class="card">
       <h2>📥 データ取込作成</h2>
-      <p class="muted">食事CSVとデイサービスPDFを取り込み、通所日を反映して、入居者全員分の請求書をまとめて作成します。<b>取り込んだ内容は保存され、タブを切り替えても・再読込しても消えません。</b></p>
-      <div class="hint">手順：<b>① CSVとPDFを取り込む</b> → <b>② 保存する</b> → <b>③ デイサービス利用日を反映</b> → <b>④ 請求書を全員分まとめて作成</b></div>
+      <p class="muted">食事CSVとデイサービス請求書PDFを取り込み、通所日を反映して、入居者全員分の請求書をまとめて作成します。<b>取り込んだ内容は保存され、タブを切り替えても・再読込しても消えません。</b></p>
+      <div class="hint">手順：<b>① CSVと請求書PDFを取り込む</b> → <b>② 保存する</b> → <b>③ デイサービス利用日を反映</b> → <b>④ 請求書を全員分まとめて作成</b></div>
     </div>
 
     <div class="card">
-      <h3>① 食事CSV・デイPDFを取り込む</h3>
-      <p class="muted">この枠に <b>食事CSV</b>（入居者ごとの喫食を集計）と <b>デイサービスPDF</b>（通所介護日を自動読取）をドラッグ＆ドロップします。両方入れてください（1つずつでもOK）。</p>
+      <h3>① 食事CSV・デイサービス請求書PDFを取り込む</h3>
+      <p class="muted">この枠に <b>食事CSV</b>（入居者ごとの喫食を集計）と <b>デイサービス請求書PDF</b>（利用明細の昼食代・おやつ代から通所日を自動読取）をドラッグ＆ドロップします。両方入れてください（1つずつでもOK）。<b>デイPDFは「介護記録」ではなく、利用明細に「昼食代・おやつ代」が載っている請求書PDF</b>を入れてください。</p>
       <div class="grid2">
         <div>
           <div id="mc_drop" ondragover="mealDragOver(event)" ondragenter="mealDragOver(event)" ondragleave="mealDragLeave(event)" ondrop="mealDrop(event)" onclick="document.getElementById('mc_file').click()">
-            <div class="big">📥 ここに食事CSV／デイPDFをドラッグ＆ドロップ</div>
-            <div class="muted">またはクリックしてファイルを選択（CSV＝食事集計／PDF＝通所日の自動読取）</div>
+            <div class="big">📥 ここに食事CSV／デイサービス請求書PDFをドラッグ＆ドロップ</div>
+            <div class="muted">またはクリックしてファイルを選択（CSV＝食事集計／請求書PDF＝通所日の自動読取）</div>
           </div>
           <input type="file" id="mc_file" accept=".csv,text/csv,.pdf,application/pdf" style="display:none" onchange="mealCsvFile(event)">
         </div>
@@ -278,7 +278,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     </div>
 
     <div class="card" id="dc_pdfCard" style="display:none">
-      <h3>③ デイPDFの通所日を反映（<span id="dc_pdfYm"></span>）</h3>
+      <h3>③ デイサービス請求書PDFを反映（<span id="dc_pdfYm"></span>）</h3>
       <p class="muted" id="dc_pdfMsg"></p>
       <div id="dc_pdfList"></div>
       <div class="row-actions">
