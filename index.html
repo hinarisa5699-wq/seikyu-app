@@ -1629,7 +1629,7 @@ function buildDoc(r,typeKey){
   }
   const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
   const _isRcpt=(typeKey==='ryoshu'||typeKey==='ryoshu_engo');
-  const _payMode=r.pay||'振込';
+  let _payMode=r.pay||'振込';if(typeKey==='engo'||typeKey==='mitsumori_s'||typeKey==='ryoshu_engo')_payMode='振込';
   const _titleMode=r.titleMode||'請求書';
   // 引落しの方は振込先を出さない（口座振替の記載に切替）。援護課あて等は従来どおり。
   if(_payMode==='引落し'&&!_isRcpt&&(typeKey==='honnin'||typeKey==='seikyu_yachin'||typeKey==='seikyu_nyukin'||typeKey==='zantei'))showBank=false;
