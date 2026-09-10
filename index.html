@@ -1558,7 +1558,7 @@ function buildDoc(r,typeKey){
     let mImpH=getMealImport(r.name,monthStr);
     if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDcMeal(r.id,monthStr));
     const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays,'',getDcMeal(r.id,monthStr).hiru.length,getDcMeal(r.id,monthStr).oya.length);
-    items=[partial?rentLine(daysMove):rentFull(),partial?supLine(daysMove):supFull(), ...mealItemsH];if(moveInThisMonth){items.push(kasaiLine());items.push(nyuLine());}
+    items=[partial?supLine(daysMove):supFull(), ...mealItemsH];if(!moveInThisMonth)items.unshift(rentFull());
     if(kyo>0)items.unshift(partial?kyoLine(daysMove):kyoFull());
     items.push(kounetsuLine(r,'honnin'));
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
