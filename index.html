@@ -1539,11 +1539,11 @@ function buildDoc(r,typeKey){
     lead='下記のとおりご請求申し上げます。【請求区分：住宅使用料（家賃分）】';
     const moveInThisMonth=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
     const partial=moveInThisMonth&&daysMove<dim;
-    items=partial?[rentLine(daysMove)]:[rentFull()];
+    items=partial?[rentLine(daysMove)]:[rentFull()];if(moveInThisMonth){items.push(kasaiLine());}
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);showBank=true;
     notes=['本請求は住宅使用料（家賃分）です。住宅扶助として援護課へご提出ください。',
       (partial?'入居月は「月額÷当月日数（'+dim+'日）×利用日数」で日割り。':'まるまる1ヶ月は満額（月額）です。'),
-      '家賃は消費税非課税。','食費・生活支援サービス費・光熱費など家賃以外は、ご本人あてに別途ご請求します。'];
+      '家賃は消費税非課税。','食費・生活支援サービス費・光熱費など家賃以外は、ご本人あてに別途ご請求します。'].concat(moveInThisMonth?['初回請求のため火災保険料（初期費用）を含みます。']:[]);
   }else if(typeKey==='honnin'){ // 生保・ご本人あて（家賃以外）
     lead='下記のとおりご請求申し上げます。【請求区分：ご本人あて利用料（家賃・食費等）（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
     const moveInThisMonth=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
@@ -1552,7 +1552,7 @@ function buildDoc(r,typeKey){
     let mImpH=getMealImport(r.name,monthStr);
     if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDcMeal(r.id,monthStr));
     const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays,'',getDcMeal(r.id,monthStr).hiru.length,getDcMeal(r.id,monthStr).oya.length);
-    items=[partial?rentLine(daysMove):rentFull(),partial?supLine(daysMove):supFull(), ...mealItemsH];
+    items=[partial?rentLine(daysMove):rentFull(),partial?supLine(daysMove):supFull(), ...mealItemsH];if(moveInThisMonth){items.push(kasaiLine());items.push(nyuLine());}
     if(kyo>0)items.unshift(partial?kyoLine(daysMove):kyoFull());
     items.push(kounetsuLine(r,'honnin'));
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
