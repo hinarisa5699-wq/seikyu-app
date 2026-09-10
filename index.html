@@ -881,9 +881,8 @@ const DOC_TYPES_OTAMESHI=[
 ];
 const DOC_TYPES_SEIHO=[
   {key:'mitsumori_s',label:'見積書（1ヶ月フル予測・援護課提出用）',suffix:'M',docTitle:'見 積 書',desc:'援護課へ提出する、1ヶ月あたりの費用予測（宛名は自動で援護課・御中）'},
-  {key:'engo',label:'援護課あて（家賃分）',suffix:'G',docTitle:'請 求 書',desc:'住宅使用料（家賃分）。援護課へ送る書類'},
+  {key:'engo_shokai',label:'援護課あて初回請求書（家賃日割り＋火災保険＋入居金）',suffix:'G',docTitle:'請 求 書',desc:'初回：家賃（入居日から日割り）＋火災保険料＋入居金・敷金。援護課へ送る初回請求書'},
   {key:'honnin',label:'ご本人あて請求書（家賃・食費等）',suffix:'H',docTitle:'請 求 書',desc:'家賃・食費・おやつ・生活支援・光熱費など、ご本人あての請求書'},
-  {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
   {key:'ryoshu_engo',label:'領収書（援護課あて・家賃分）',suffix:'Y',docTitle:'領 収 書',desc:'援護課からの家賃（住宅使用料）入金に対する領収書'},
   {key:'ryoshu',label:'領収書（ご本人あて）',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
 ];
@@ -1464,7 +1463,7 @@ function buildDoc(r,typeKey){
   const daysMove=move?moveInDays(move):0;
   const dim=daysInMonth(monthD||issue); // 当月の実日数（日割りの基準）
   // 宛先の既定
-  if(typeKey==='engo'){to=state.settings.bank.engo||r.billto||'';keisho='御中';}
+  if(typeKey==='engo'||typeKey==='engo_shokai'){to=state.settings.bank.engo||r.billto||'';keisho='御中';}
   else if(typeKey==='mitsumori_s'){to=state.settings.bank.engo||r.billto||'';keisho='御中';} // 援護課へ提出用
   else if(typeKey==='ryoshu_engo'){to=state.settings.bank.engo||r.billto||'';keisho='御中';}
   else if(typeKey==='honnin'){to=(r.atesaki==='ご家族'&&r.family)?r.family:r.name;keisho='様';}
@@ -1535,6 +1534,13 @@ function buildDoc(r,typeKey){
     notes=['本請求はお部屋の確保（仮押さえ）のための前金（家賃1ヶ月分）です。',
       '仮押さえの有効期間は発行日から1ヶ月です。期間内にご契約ください。',
       'ご入居に至った場合、本前金は初回家賃に充当します。','キャンセル時の返金は契約書の定めによります。'];
+  }else if(typeKey==='engo_shokai'){ // 援護課あて 初回請求書（家賃日割り＋火災保険＋入居金）
+    lead='下記のとおりご請求申し上げます。【請求区分：初回（家賃・火災保険・入居金）】';
+    const moveInThisMonth=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
+    const partial=moveInThisMonth&&daysMove<dim;
+    items=[partial?rentLine(daysMove):rentFull(),kasaiLine(),nyuLine()];
+    dueLabel='お支払期限';due=endOfMonth(monthD||issue);showBank=true;
+    notes=['本請求は初回の家賃（日割り）・火災保険料・入居金です。住宅扶助として援護課へご提出ください。',(partial?'家賃は入居月のため「月額÷当月日数（'+dim+'日）×利用日数」で日割り。':'家賃は満額（月額）です。'),'家賃・火災保険料・入居金は消費税非課税。','食費・生活支援サービス費・光熱費など家賃以外は、ご本人あてに別途ご請求します。'];
   }else if(typeKey==='engo'){ // 生保・援護課あて（家賃分）
     lead='下記のとおりご請求申し上げます。【請求区分：住宅使用料（家賃分）】';
     const moveInThisMonth=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
@@ -1629,7 +1635,7 @@ function buildDoc(r,typeKey){
   }
   const total=items.filter(x=>x.inc).reduce((s,x)=>s+(+x.amount||0),0);
   const _isRcpt=(typeKey==='ryoshu'||typeKey==='ryoshu_engo');
-  let _payMode=r.pay||'振込';if(typeKey==='engo'||typeKey==='mitsumori_s'||typeKey==='ryoshu_engo')_payMode='振込';
+  let _payMode=r.pay||'振込';if(typeKey==='engo'||typeKey==='engo_shokai'||typeKey==='mitsumori_s'||typeKey==='ryoshu_engo')_payMode='振込';
   const _titleMode=r.titleMode||'請求書';
   // 引落しの方は振込先を出さない（口座振替の記載に切替）。援護課あて等は従来どおり。
   if(_payMode==='引落し'&&!_isRcpt&&(typeKey==='honnin'||typeKey==='seikyu_yachin'||typeKey==='seikyu_nyukin'||typeKey==='zantei'))showBank=false;
