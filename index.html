@@ -235,17 +235,17 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
   <section id="tab-mealcsv" style="display:none">
     <div class="card">
       <h2>📥 データ取込作成</h2>
-      <p class="muted">食事CSVとデイサービス請求書PDFを取り込み、通所日を反映して、入居者全員分の請求書をまとめて作成します。<b>取り込んだ内容は保存され、タブを切り替えても・再読込しても消えません。</b></p>
+      <p class="muted">食事CSVとデイPDF（介護記録／請求書）を取り込み、通所日を反映して、入居者全員分の請求書をまとめて作成します。<b>取り込んだ内容は保存され、タブを切り替えても・再読込しても消えません。</b></p>
       <div class="hint">手順：<b>① CSVと請求書PDFを取り込む</b> → <b>② 保存する</b> → <b>③ デイサービス利用日を反映</b> → <b>④ 請求書を全員分まとめて作成</b></div>
     </div>
 
     <div class="card">
-      <h3>① 食事CSV・デイサービス請求書PDFを取り込む</h3>
-      <p class="muted">この枠に <b>食事CSV</b>（入居者ごとの喫食を集計）と <b>デイサービス請求書PDF</b>（利用明細の昼食代・おやつ代から通所日を自動読取）をドラッグ＆ドロップします。両方入れてください（1つずつでもOK）。<b>デイPDFは「介護記録」ではなく、利用明細に「昼食代・おやつ代」が載っている請求書PDF</b>を入れてください。</p>
+      <h3>① 食事CSV・デイPDF（介護記録／請求書）を取り込む</h3>
+      <p class="muted">この枠に <b>食事CSV</b>（入居者ごとの喫食を集計）と <b>デイサービス請求書PDF</b>（利用明細の昼食代・おやつ代から通所日を自動読取）をドラッグ＆ドロップします。両方入れてください（1つずつでもOK）。<b>デイPDFは介護記録（日々の食事・おやつ記録）が基本。区分変更中で請求書に数字が出ない時も介護記録</b>を入れてください。</p>
       <div class="grid2">
         <div>
           <div id="mc_drop" ondragover="mealDragOver(event)" ondragenter="mealDragOver(event)" ondragleave="mealDragLeave(event)" ondrop="mealDrop(event)" onclick="document.getElementById('mc_file').click()">
-            <div class="big">📥 ここに食事CSV／デイサービス請求書PDFをドラッグ＆ドロップ</div>
+            <div class="big">📥 ここに食事CSV／デイPDF（介護記録・請求書）をドラッグ＆ドロップ</div>
             <div class="muted">またはクリックしてファイルを選択（CSV＝食事集計／請求書PDF＝通所日の自動読取）</div>
           </div>
           <input type="file" id="mc_file" accept=".csv,text/csv,.pdf,application/pdf" style="display:none" onchange="mealCsvFile(event)">
@@ -278,7 +278,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
     </div>
 
     <div class="card" id="dc_pdfCard" style="display:none">
-      <h3>③ デイサービス請求書PDFを反映（<span id="dc_pdfYm"></span>）</h3>
+      <h3>③ デイPDF（介護記録／請求書）を反映（<span id="dc_pdfYm"></span>）</h3>
       <p class="muted" id="dc_pdfMsg"></p>
       <div id="dc_pdfList"></div>
       <div class="row-actions">
@@ -1238,44 +1238,70 @@ function loadPdfJs(){
   });
 }
 async function pdfToLines(buf){
-  const lib=await loadPdfJs();
-  const pdf=await lib.getDocument({data:buf}).promise;
-  const pages=[];
-  for(let p=1;p<=pdf.numPages;p++){
-    const page=await pdf.getPage(p);const tc=await page.getTextContent();
-    const rows={};
-    tc.items.forEach(it=>{const y=Math.round(it.transform[5]);const x=it.transform[4];(rows[y]=rows[y]||[]).push({x,s:it.str});});
-    const ys=Object.keys(rows).map(Number).sort((a,b)=>b-a);
-    ys.forEach(y=>{const line=rows[y].sort((a,b)=>a.x-b.x).map(o=>o.s).join(' ').replace(/\s+/g,' ').trim();if(line)pages.push(line);});
+  var lib=await loadPdfJs();
+  var pdf=await lib.getDocument({data:buf}).promise;
+  var out=[];
+  for(var p=1;p<=pdf.numPages;p++){
+    var page=await pdf.getPage(p);var tc=await page.getTextContent();
+    var rows={};
+    tc.items.forEach(function(it){var y=Math.round(it.transform[5]);var x=it.transform[4];(rows[y]=rows[y]||[]).push({x:x,s:it.str});});
+    Object.keys(rows).map(Number).sort(function(a,b){return b-a;}).forEach(function(y){
+      var line=rows[y].sort(function(a,b){return a.x-b.x;}).map(function(o){return o.s;}).join(' ').replace(/\s+/g,' ').trim();
+      if(line)out.push({p:p,y:y,text:line});
+    });
   }
-  return pages;
+  return out;
 }
-function parseDaycareFromLines(lines){
+function parseDaycareFromLines(rows){
   var norm=function(s){return String(s||'').replace(/[\s　]/g,'');};
+  var texts=rows.map(function(r){return r.text;});
+  var isKaigo=texts.some(function(t){return t.indexOf('介護記録')>=0;})&&!texts.some(function(t){return t.indexOf('昼食代')>=0||t.indexOf('おやつ代')>=0;});
   var resList=state.residents.map(function(r){return {r:r,nn:norm(r.name)};}).filter(function(x){return x.nn;});
-  var curYm=null,current=null;var bag={};
+  var bag={};
   var getB=function(ym,rid){var k=ym+'|'+rid;if(!bag[k])bag[k]={hiru:new Set(),oya:new Set(),attend:new Set()};return bag[k];};
-  lines.forEach(function(l){
-    var mm=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*分/);
-    if(mm){curYm=(2018+parseInt(mm[1],10))+'-'+pad2(parseInt(mm[2],10));}
-    var ln=norm(l);
-    resList.forEach(function(x){if(ln.indexOf(x.nn+'様')>=0)current=x.r;});
-    if(!current||!curYm)return;
-    var dm=l.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
-    if(!dm)return;
-    var day=parseInt(dm[2],10);if(!(day>=1&&day<=31))return;
-    var b=getB(curYm,current.id);
-    if(l.indexOf('おやつ代')>=0)b.oya.add(day);
-    else if(l.indexOf('昼食代')>=0)b.hiru.add(day);
-    else if(l.indexOf('地域通所介護')>=0)b.attend.add(day);
-  });
+  if(isKaigo){
+    var byPage={};
+    rows.forEach(function(r){(byPage[r.p]=byPage[r.p]||[]).push(r);});
+    var current=null;
+    Object.keys(byPage).map(Number).sort(function(a,b){return a-b;}).forEach(function(p){
+      var prs=byPage[p];
+      prs.forEach(function(r){var m=r.text.match(/氏名[:：]\s*(.+)/);if(m){var nn=norm(m[1].replace(/[\(（].*/,''));var hit=resList.find(function(x){return x.nn===nn||nn.indexOf(x.nn)===0;});current=hit?hit.r:null;}});
+      if(!current)return;
+      var dates=[];
+      prs.forEach(function(r){var t=r.text.replace(/[\s　]/g,'');var mm=t.match(/20(\d\d)年(\d+)月(\d+)日/);if(mm)dates.push({y:r.y,ym:'20'+mm[1]+'-'+pad2(parseInt(mm[2],10)),day:parseInt(mm[3],10)});});
+      if(!dates.length)return;
+      var nearest=function(y){var best=null,bd=1e9;dates.forEach(function(d){var dd=Math.abs(d.y-y);if(dd<bd){bd=dd;best=d;}});return best;};
+      prs.forEach(function(r){
+        var t=r.text;var d;
+        if(/^食事\s+\d{1,2}:\d{2}/.test(t)){d=nearest(r.y);if(d)getB(d.ym,current.id).hiru.add(d.day);}
+        else if(/^おやつ\s+\d{1,2}:\d{2}/.test(t)){d=nearest(r.y);if(d)getB(d.ym,current.id).oya.add(d.day);}
+        else if(/^利用登録/.test(t)&&t.indexOf('利用：×')<0){d=nearest(r.y);if(d)getB(d.ym,current.id).attend.add(d.day);}
+      });
+    });
+  }else{
+    var curYm=null,current2=null;
+    texts.forEach(function(l){
+      var mm=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*分/);
+      if(mm){curYm=(2018+parseInt(mm[1],10))+'-'+pad2(parseInt(mm[2],10));}
+      var ln=norm(l);
+      resList.forEach(function(x){if(ln.indexOf(x.nn+'様')>=0)current2=x.r;});
+      if(!current2||!curYm)return;
+      var dm=l.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+      if(!dm)return;
+      var day=parseInt(dm[2],10);if(!(day>=1&&day<=31))return;
+      var b=getB(curYm,current2.id);
+      if(l.indexOf('おやつ代')>=0)b.oya.add(day);
+      else if(l.indexOf('昼食代')>=0)b.hiru.add(day);
+      else if(l.indexOf('地域通所介護')>=0)b.attend.add(day);
+    });
+  }
   var entries=Object.keys(bag).map(function(k){
     var i=k.indexOf('|');var ym=k.slice(0,i),rid=k.slice(i+1);var b=bag[k];
     var rr=state.residents.find(function(r){return r.id===rid;})||{};
     return {ym:ym,residentId:rid,name:rr.name,hiru:Array.from(b.hiru).sort(function(a,b){return a-b;}),oya:Array.from(b.oya).sort(function(a,b){return a-b;}),attend:Array.from(b.attend).sort(function(a,b){return a-b;})};
   }).filter(function(e){return e.hiru.length||e.oya.length||e.attend.length;});
   var months=Array.from(new Set(entries.map(function(e){return e.ym;}))).sort();
-  var isKaigo=lines.some(function(l){return l.indexOf('介護記録')>=0;})&&!lines.some(function(l){return l.indexOf('昼食代')>=0||l.indexOf('おやつ代')>=0;});return {entries:entries,months:months,ym:months[months.length-1]||null,docHint:isKaigo?'kaigo':''};
+  return {entries:entries,months:months,ym:months[months.length-1]||null,docHint:isKaigo?'kaigo':''};
 }
 async function handleDaycarePdf(f){
   const card=$('dc_pdfCard');
@@ -1295,9 +1321,9 @@ async function handleDaycarePdf(f){
 function renderPdfDaycarePreview(res,fname){
   var entries=(res&&res.entries)?res.entries:[];
   $('dc_pdfYm').textContent=(res&&res.months&&res.months.length)?res.months.join('、'):((res&&res.ym)?res.ym:'月が読めませんでした');
-  if(!entries.length){if(res&&res.docHint==='kaigo'){$('dc_pdfMsg').innerHTML='<b>これは「介護記録」PDFです。</b>このツールは<b>デイサービス利用料請求書</b>（利用明細に「昼食代・おやつ代」が載っているPDF）から取り込みます。請求書PDFを取り込んでください。<br><span class="muted">※介護記録は日付レイアウトの都合で請求回数と数件ずれるため、正確な二重防止には請求書をお使いください。</span>';}else{$('dc_pdfMsg').textContent='通所介護日を持つ登録入居者が見つかりませんでした（'+esc(fname||'')+'）。氏名が登録と一致しているかご確認ください。';}$('dc_pdfList').innerHTML='';return;}
+  if(!entries.length){$('dc_pdfMsg').textContent='該当する登録入居者が見つかりませんでした（'+esc(fname||'')+'）。氏名が登録と一致しているかご確認ください。';$('dc_pdfList').innerHTML='';return;}
   var stamp=(res&&res.importedAt)?res.importedAt:'';
-  $('dc_pdfMsg').innerHTML='<b>'+esc(fname||'')+'</b>'+(stamp?'（取込日時 '+esc(stamp)+'）':'')+' から '+entries.length+' 件を読み取りました。内容を確認して反映してください。';
+  $('dc_pdfMsg').innerHTML='<b>'+esc(fname||'')+'</b>'+(stamp?'（取込日時 '+esc(stamp)+'）':'')+' から '+entries.length+' 件を読み取りました。内容を確認して反映してください。'+(res&&res.docHint==='kaigo'?'<br><span class="muted">※介護記録の食事・おやつ記録から集計。請求回数と数件異なる場合があります。下のカレンダーで調整できます。</span>':'');
   var byYm={};entries.forEach(function(e){if(!byYm[e.ym])byYm[e.ym]=[];byYm[e.ym].push(e);});
   var html='';
   Object.keys(byYm).sort().forEach(function(ym){
