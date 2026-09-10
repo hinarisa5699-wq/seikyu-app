@@ -882,8 +882,7 @@ const DOC_TYPES_OTAMESHI=[
 const DOC_TYPES_SEIHO=[
   {key:'mitsumori_s',label:'見積書（1ヶ月フル予測・援護課提出用）',suffix:'M',docTitle:'見 積 書',desc:'援護課へ提出する、1ヶ月あたりの費用予測（宛名は自動で援護課・御中）'},
   {key:'engo',label:'援護課あて（家賃分）',suffix:'G',docTitle:'請 求 書',desc:'住宅使用料（家賃分）。援護課へ送る書類'},
-  {key:'honnin',label:'ご本人あて請求書（家賃以外）',suffix:'H',docTitle:'請 求 書',desc:'食費・おやつ・生活支援・光熱費など、家賃以外の本当の請求書'},
-  {key:'zantei',label:'前払い（暫定）請求書・ご本人あて',suffix:'Z',docTitle:'請 求 書',desc:'翌月分などの先払い。お昼＋おやつを毎日分から通所介護日（カレンダー）を差し引いて算定'},
+  {key:'honnin',label:'ご本人あて請求書（家賃・食費等）',suffix:'H',docTitle:'請 求 書',desc:'家賃・食費・おやつ・生活支援・光熱費など、ご本人あての請求書'},
   {key:'seikyu_nyukin',label:'請求書（入居金・初期費用）',suffix:'S',docTitle:'請 求 書',desc:'入居金＋火災保険料。支払期限は入居日から1ヶ月'},
   {key:'ryoshu_engo',label:'領収書（援護課あて・家賃分）',suffix:'Y',docTitle:'領 収 書',desc:'援護課からの家賃（住宅使用料）入金に対する領収書'},
   {key:'ryoshu',label:'領収書（ご本人あて）',suffix:'Y',docTitle:'領 収 書',desc:'入金後に発行'}
@@ -1520,18 +1519,18 @@ function buildDoc(r,typeKey){
       (partial?'入居月は「月額÷当月日数（'+dim+'日）×利用日数」で日割り。':'まるまる1ヶ月は満額（月額）です。'),
       '家賃は消費税非課税。','食費・生活支援サービス費・光熱費など家賃以外は、ご本人あてに別途ご請求します。'];
   }else if(typeKey==='honnin'){ // 生保・ご本人あて（家賃以外）
-    lead='下記のとおりご請求申し上げます。【請求区分：家賃以外の利用料（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
+    lead='下記のとおりご請求申し上げます。【請求区分：ご本人あて利用料（家賃・食費等）（'+(monthD?(monthD.getMonth()+1):'')+'月分）】';
     const moveInThisMonth=(move&&monthD&&move.getFullYear()===monthD.getFullYear()&&move.getMonth()===monthD.getMonth());
     const partial=moveInThisMonth&&daysMove<dim;
     const mealDays=partial?daysMove:dim;
     let mImpH=getMealImport(r.name,monthStr);
     if(mImpH)mImpH=adjustMealByDaycare(mImpH,getDcMeal(r.id,monthStr));
     const mealItemsH=mImpH?importMealLines(mImpH):mealLines(r,mealDays,'',getDcMeal(r.id,monthStr).hiru.length,getDcMeal(r.id,monthStr).oya.length);
-    items=[partial?supLine(daysMove):supFull(), ...mealItemsH];
+    items=[partial?rentLine(daysMove):rentFull(),partial?supLine(daysMove):supFull(), ...mealItemsH];
     if(kyo>0)items.unshift(partial?kyoLine(daysMove):kyoFull());
     items.push(kounetsuLine(r,'honnin'));
     dueLabel='お支払期限';due=endOfMonth(monthD||issue);
-    notes=['本請求は家賃以外（食費・生活支援サービス費・光熱費等）です。家賃分は援護課あてに別途ご請求します。',
+    notes=['本請求は家賃・食費・生活支援サービス費・光熱費等です。家賃は非課税、食費・生活支援サービス費は課税。',
       '食費・生活支援サービス費は課税。',
       (mImpH?'食費は '+monthStr+' の喫食実績に基づく実額です。':'食費は朝食（食事＋配膳）・昼・夕・おやつの単価×回数です。'),
       '光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。個人契約の方は請求対象外。'];
@@ -1652,7 +1651,7 @@ function fillDocForm(){
   $('dmTitle').textContent=d.docTitle.replace(/ /g,'')+'の作成 — '+d.residentName+' 様';
   $('dm_to').value=d.to;$('dm_keisho').value=d.keisho;$('dm_tanto').value=d.tanto||'';
   $('dm_issue').value=d.issue;$('dm_number').value=d.number;
-  $('dm_dueLabel').textContent=d.dueLabel||'期限';$('dm_due').value=d.due||'';
+  $('dm_dueLabel').textContent=d.dueLabel||'期限';$('dm_due').value=d.due||'';if($('dm_due')){var _dd=(d.docTitle||'').replace(/\s/g,'');var _r=$('dm_due').closest('.grid3');if(_r)_r.style.display=(_dd==='見積書'||_dd==='明細書')?'none':'';}
   $('dm_notes').value=(d.notes||[]).join('\n');
   $('dm_showBank').checked=!!d.showBank;
   const isR=(d.typeKey==='ryoshu'||d.typeKey==='ryoshu_engo');
@@ -1755,7 +1754,7 @@ function applyDocType(d,kind){
 }
 function onDocTypeChange(){
   if(!currentDoc)return;
-  applyDocType(currentDoc,$('dm_docType').value);
+  applyDocType(currentDoc,$('dm_docType').value);if($('dm_due')){var _dd=(currentDoc.docTitle||'').replace(/\s/g,'');var _r=$('dm_due').closest('.grid3');if(_r)_r.style.display=(_dd==='見積書'||_dd==='明細書')?'none':'';}
   $('dmTitle').textContent=currentDoc.docTitle.replace(/ /g,'')+'の作成 — '+currentDoc.residentName+' 様';
   renderDocPreview();
 }
@@ -1822,7 +1821,7 @@ function docHTML(d){
   const issueD=parseD(d.issue),dueD=parseD(d.due);
   const isMeisai=(d.titleMode==='明細書')||(d.docTitle&&d.docTitle.replace(/\s/g,'')==='明細書');
   const isSeikyu=!!(d.docTitle&&d.docTitle.replace(/\s/g,'')==='請求書');
-  const dueD2=isMeisai?null:dueD; // 明細書はお支払期限を出さない
+  const isMitsu=!!(d.docTitle&&d.docTitle.replace(/\s/g,'')==='見積書');const dueD2=(isMeisai||isMitsu)?null:dueD; // 明細書・見積書はお支払期限を出さない
   const isReceipt=(d.typeKey==='ryoshu'||d.typeKey==='ryoshu_engo');
   let inner='';
   const header=`
