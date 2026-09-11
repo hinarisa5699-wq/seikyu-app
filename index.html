@@ -1183,7 +1183,7 @@ function renderMealCsv(){
 function getDaycareDays(rid,ym){return (state.daycare&&state.daycare[ym]&&state.daycare[ym][rid])?state.daycare[ym][rid].slice():[];}
 function getDcMeal(rid,ym){
   var m=(state.dcMeal&&state.dcMeal[ym]&&state.dcMeal[ym][rid])?state.dcMeal[ym][rid]:null;
-  if(m)return {hiru:(m.hiru||[]).map(Number),oya:(m.oya||[]).map(Number)};
+  if(m){var _set={};(m.hiru||[]).forEach(function(d){_set[+d]=1;});(m.oya||[]).forEach(function(d){_set[+d]=1;});var _all=Object.keys(_set).map(Number).sort(function(a,b){return a-b;});return {hiru:_all.slice(),oya:_all.slice()};}
   var d=getDaycareDays(rid,ym);
   return {hiru:d.slice(),oya:d.slice()};
 }
