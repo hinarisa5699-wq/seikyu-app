@@ -1994,7 +1994,7 @@ function renderPayments(){
     <td>${esc(d.residentName||d.to||'')}</td><td>${yen(d.total)}</td>
     <td>${d.paid?'<span class="badge normal">入金済</span>':'<span class="badge seiho">未入金</span>'}</td>
     <td><input type="date" value="${esc(d.paidDate||'')}" onchange="setPaidDate('${d.id}',this.value)" style="max-width:150px"></td>
-    <td>${d.paid?`<button class="btn sec sm" onclick="togglePaid('${d.id}',false)">未入金に戻す</button>`:`<button class="btn sm" onclick="togglePaid('${d.id}',true)">入金済にする</button>`}</td>
+    <td>${d.paid?`<button class="btn sec sm" onclick="togglePaid('${d.id}',false)">未入金に戻す</button> <button class="btn sm" onclick="makeReceipt('${d.id}')">領収書発行</button>`:`<button class="btn sm" onclick="togglePaid('${d.id}',true)">入金済にする</button>`}</td>
   </tr>`).join('');
   $('payEmpty').style.display=docs.length?'none':'';
   $('payTable').style.display=docs.length?'':'none';
