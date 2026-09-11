@@ -1695,7 +1695,7 @@ function fillDocForm(){
   }
   $('dm_receiptExtra').style.display=isR?'':'none';
   $('dm_items').closest ? null : null;
-  document.querySelector('#dm_items').parentElement.style.display=isR?'none':'';
+  var _it=document.querySelector('#dm_items');if(_it){_it.style.display=isR?'none':'';var _h=_it.previousElementSibling;if(_h&&_h.tagName==='H3')_h.style.display=isR?'none':'';}var _ra=document.querySelector('#docModal .row-actions');if(_ra)_ra.style.display=isR?'none':'';var _tb=document.querySelector('#docModal .totalbar');if(_tb)_tb.style.display=isR?'none':'';
   if(isR){$('dm_tadashi').value=d.tadashi||'';$('dm_receiptAmt').value=d.receiptAmt||'';}
   buildPresetOptions();
   renderItemRows();
