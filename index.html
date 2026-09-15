@@ -1816,6 +1816,7 @@ function saveAndPreview(silent){
   const i=state.documents.findIndex(x=>x.id===currentDoc.id);
   if(i>=0)state.documents[i]=JSON.parse(JSON.stringify(currentDoc));
   else state.documents.push(JSON.parse(JSON.stringify(currentDoc)));
+  state.documents=state.documents.filter(function(x){return x.id===currentDoc.id||x.number!==currentDoc.number;});
   // 充当した仮押さえを「充当済み」にする（次回以降は差し引かない＝二重防止）
   let kmsg='';
   if(currentDoc.appliedKario&&currentDoc.appliedKario.length){
@@ -2206,6 +2207,7 @@ async function savePdfDoc(d){
     if(!d.number)d.number=ensureNumber(d,true);
     d.savedAt=nowStamp();
     state.documents.push(JSON.parse(JSON.stringify(d)));
+    state.documents=state.documents.filter(function(x){return x.id===d.id||x.number!==d.number;});
     saveLocal();if(github.connected)pushNow();
     try{renderHistory();}catch(e){}
   }
