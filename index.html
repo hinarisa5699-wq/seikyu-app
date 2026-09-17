@@ -1883,7 +1883,7 @@ function docHTML(d){
       <div class="dtitle">${esc(d.docTitle)}</div>
       ${header}
       <div class="receipt-amt">金 ${yen(d.receiptAmt||d.total)} －</div>
-      <div class="tadashi">但し　${esc(d.tadashi||'')}　として</div>
+      <div class="tadashi">但し　${esc(d.tadashi||'')}</div>
       <div>上記正に領収いたしました。</div>
       <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:20px">
         <div class="inshi">${(d.receiptAmt||d.total)>=50000?'収入印紙<br>貼付欄':'（5万円未満<br>印紙不要）'}</div>
