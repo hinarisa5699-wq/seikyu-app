@@ -1866,7 +1866,7 @@ function docHTML(d){
       </div>
       <div class="meta">
         <table>
-          <tr><td>発行日</td><td>${esc(fmtWareki(issueD))}</td></tr>
+          <tr><td>発行日</td><td>${esc(fmtWareki(issueD))}</td></tr>${isReceipt&&d.paidDate?`<tr><td>入金日</td><td>${esc(fmtWareki(parseD(d.paidDate)))}</td></tr>`:''}
           <tr><td>番号</td><td>${esc(d.number)}</td></tr>
         </table>
         <div class="issuer">
@@ -2165,7 +2165,7 @@ function makeReceipt(id){
   d.receiptAmt=src.total;d.total=src.total;
   d.tadashi=engo?('住宅使用料（家賃分）として（'+src.number+'）'):(src.typeLabel+'（'+src.number+'）の代金として');
   d.showBank=false;d.lead='';d.notes=['上記正に領収いたしました。'];
-  d.issue=todayStr();d.number=ensureNumber(d,false);
+  d.paidDate=src.paidDate||todayStr();d.issue=todayStr();d.number=ensureNumber(d,false);
   currentDoc=d;if($('createResident'))$('createResident').value=d.residentId||'';fillDocForm();openModal('docModal');renderDocPreview();
 }
 
