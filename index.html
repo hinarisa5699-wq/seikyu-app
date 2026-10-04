@@ -460,7 +460,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <span class="chip" data-sset="prices" onclick="showSet('prices')">単価表</span>
         <span class="chip" data-sset="meals" onclick="showSet('meals')">食事代</span>
         <span class="chip" data-sset="bank" onclick="showSet('bank')">振込先・文言</span>
-        <span class="chip" data-sset="github" onclick="showSet('github')">GitHub連携</span>
+        <span class="chip" data-sset="github" onclick="showSet('github')">データ連動</span>
       </div>
     </div>
     <div class="card sset" id="sset-company">
@@ -523,7 +523,17 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <label>生保・援護課あての宛名（既定）</label><input id="b_engo" placeholder="例：町田市 生活援護課">
     </div>
     <div class="card sset" id="sset-github" style="display:none">
-      <h3>GitHub連携（データ連動）</h3>
+      <h3>データ連動（クラウド保存）</h3>
+      <div class="hint">入居者データと請求履歴は会社のGoogleドライブに保存され、どのPC・どのブラウザからでも同じデータが使えます。新しいPCでは最初の1回だけ合言葉を入れれば、あとは自動で連動します。</div>
+      <div class="row-actions">
+        <button class="btn" onclick="pullNow()">クラウドから読込</button>
+        <button class="btn sec" onclick="pushNow()">クラウドへ保存</button>
+        <button class="btn danger" onclick="cloudForget()">このPCの合言葉を消す</button>
+      </div>
+      <div id="c_status" class="muted" style="margin-top:8px"></div>
+      <label style="margin-top:14px">合言葉を変更する（職員が辞めたときなど）</label>
+      <div class="row-actions"><input id="c_newpass" type="password" autocomplete="off" placeholder="新しい合言葉（6文字以上）" style="max-width:260px"><button class="btn sec" onclick="cloudChangePass()">変更</button></div>
+      <div style="display:none"><h3>GitHub連携（旧）</h3>
       <div class="hint">ここを設定すると、入居者データと請求履歴がGitHub上の<b>非公開リポジトリ</b>に保存され、どのPCの同じURLからでも同じデータが使えます。トークンはこのブラウザ内だけに保存されます。</div>
       <div class="grid2">
         <div><label>GitHubユーザー名（owner）</label><input id="g_owner" placeholder="例：ikeikecompany"></div>
@@ -541,7 +551,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <button class="btn sec" onclick="pushNow()">クラウドへ保存</button>
         <button class="btn danger" onclick="disconnectGithub()">連携解除</button>
       </div>
-      <div id="g_status" class="muted" style="margin-top:8px"></div>
+      <div id="g_status" class="muted" style="margin-top:8px"></div></div>
     </div>
     <div class="card">
       <div class="row-actions">
@@ -665,6 +675,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
    データ構造と既定値
    ============================================================ */
 const LS_KEY='seikyu_data_v1';
+const CLOUD_URL='https://script.google.com/macros/s/AKfycbxUhpi1F1k0c3jk4EsabPG79u15T_bfSCwVrXJprfjn_g7fs8UdKrJprVaYAY-29Cf_/exec';
 const LS_CFG='seikyu_github_cfg_v1';
 function defaultState(){return{
   settings:{
@@ -732,7 +743,7 @@ function loadCfg(){try{const c=localStorage.getItem(LS_CFG);if(c){Object.assign(
 function saveCfg(){try{localStorage.setItem(LS_CFG,JSON.stringify({owner:github.owner,repo:github.repo,branch:github.branch,path:github.path,token:github.token}));}catch(e){}}
 
 let saveTimer=null;
-function persist(){saveLocal();if(github.connected){clearTimeout(saveTimer);saveTimer=setTimeout(pushNow,1200);}}
+function persist(){saveLocal();window.__lastEdit=Date.now();if(github.connected){clearTimeout(saveTimer);saveTimer=setTimeout(pushNow,1200);}}
 
 function utf8ToB64(s){const b=new TextEncoder().encode(s);let bin='';for(const x of b)bin+=String.fromCharCode(x);return btoa(bin);}
 function b64ToUtf8(b){const bin=atob(b.replace(/\s/g,''));const arr=Uint8Array.from(bin,c=>c.charCodeAt(0));return new TextDecoder().decode(arr);}
@@ -740,6 +751,7 @@ function ghUrl(){return `https://api.github.com/repos/${github.owner}/${github.r
 function ghHeaders(){return{'Authorization':'Bearer '+github.token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};}
 
 async function pullNow(){
+  if(CLOUD_URL){return cloudPull();}
   if(!github.owner||!github.repo||!github.token){setSync(false,'連携情報が未入力です');return;}
   setSync(false,'クラウドから読込中…');
   try{
@@ -754,6 +766,7 @@ async function pullNow(){
   }catch(e){setSync(false,'読込エラー：'+e.message);}
 }
 async function pushNow(){
+  if(CLOUD_URL){return cloudPush();}
   if(!github.owner||!github.repo||!github.token){setSync(false,'連携情報が未入力です');return;}
   try{
     // 最新shaを取得（競合回避）
@@ -779,10 +792,109 @@ async function keepStorage(){
     }
   }catch(e){}
 }
+function cloudPass(){try{return localStorage.getItem('seikyu_cloud_pass_v1')||'';}catch(e){return '';}}
+function cloudSetPass(p){try{if(p)localStorage.setItem('seikyu_cloud_pass_v1',p);else localStorage.removeItem('seikyu_cloud_pass_v1');}catch(e){}}
+async function cloudCall(action,extra){
+  var body=Object.assign({action:action,pass:cloudPass()},extra||{});
+  var r=await fetch(CLOUD_URL,{method:'POST',body:JSON.stringify(body)});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return await r.json();
+}
+function cloudErrMsg(e){
+  return {auth:'合言葉がちがいます',locked:'合言葉を何度もまちがえたため10分間ロック中です',not_initialized:'合言葉がまだ決まっていません',short:'合言葉は6文字以上にしてください',already:'合言葉はすでに決まっています'}[e]||('エラー：'+e);
+}
+async function cloudPull(){
+  if(!cloudPass()){cloudAsk();return;}
+  setSync(false,'クラウドから読込中…');
+  try{
+    var j=await cloudCall('pull');
+    if(!j.ok){
+      if(j.error==='auth'){cloudSetPass('');github.connected=false;setSync(false,cloudErrMsg('auth'));cloudAsk(cloudErrMsg('auth'));return;}
+      throw new Error(cloudErrMsg(j.error));
+    }
+    if(j.empty){
+      github.connected=true;
+      var hasLocal=state&&state.residents&&state.residents.length>0;
+      if(hasLocal){await cloudPush();}else{setSync(true,'接続OK（クラウドは空です）');}
+      return;
+    }
+    var data=JSON.parse(j.data);
+    state=Object.assign(defaultState(),data);state.counters=state.counters||{byYm:{},batch:{}};state.mealData=state.mealData||{};state.mailing=state.mailing||{};state.daycare=state.daycare||{};
+    github.connected=true;saveLocal();renderAll();
+    setSync(true,'クラウドと同期済み（最終読込 '+new Date().toLocaleTimeString('ja-JP')+'）');
+  }catch(e){setSync(false,'読込エラー：'+e.message);}
+}
+async function cloudPush(){
+  if(!cloudPass()){cloudAsk();return;}
+  setSync(true,'クラウドへ保存中…');
+  try{
+    var j=await cloudCall('push',{data:JSON.stringify(state)});
+    if(!j.ok)throw new Error(cloudErrMsg(j.error));
+    github.connected=true;window.__cloudLastPush=Date.now();
+    setSync(true,'クラウドへ保存済み（'+new Date().toLocaleTimeString('ja-JP')+'）');
+  }catch(e){setSync(false,'保存エラー：'+e.message);}
+}
+function cloudAsk(msg){
+  var old=document.getElementById('cloudModal');if(old)old.remove();
+  var w=document.createElement('div');w.id='cloudModal';
+  w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+  w.innerHTML='<div style="background:#fff;border-radius:12px;max-width:420px;width:100%;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,.25);font-size:14px">'
+   +'<h3 id="cm_title" style="margin:0 0 8px;font-size:17px;color:#1e6fb8">データ連動の合言葉</h3>'
+   +'<div id="cm_desc" style="color:#555;margin-bottom:12px;line-height:1.6">読み込み中…</div>'
+   +'<input id="cm_p1" type="password" autocomplete="off" placeholder="合言葉" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #bbb;border-radius:8px;margin-bottom:8px">'
+   +'<input id="cm_p2" type="password" autocomplete="off" placeholder="もう一度（確認）" style="width:100%;box-sizing:border-box;padding:10px;font-size:16px;border:1px solid #bbb;border-radius:8px;margin-bottom:8px;display:none">'
+   +'<div id="cm_err" style="color:#c0392b;min-height:20px;margin-bottom:8px"></div>'
+   +'<div style="display:flex;gap:8px;justify-content:flex-end"><button id="cm_later" class="btn sec">あとで</button><button id="cm_ok" class="btn">OK</button></div></div>';
+  document.body.appendChild(w);
+  var mode='login';
+  document.getElementById('cm_later').onclick=function(){w.remove();setSync(false);};
+  if(msg)document.getElementById('cm_err').textContent=msg;
+  fetch(CLOUD_URL,{method:'POST',body:JSON.stringify({action:'status'})}).then(function(r){return r.json();}).then(function(st){
+    if(st.ok&&!st.initialized){
+      mode='init';
+      document.getElementById('cm_title').textContent='合言葉を決めてください（最初の1回だけ）';
+      document.getElementById('cm_desc').innerHTML='事務の4人で共通の合言葉を決めます（6文字以上）。<br>ほかのPCでは、最初に開いたときだけこの合言葉を入れれば、次からは自動で連動します。';
+      document.getElementById('cm_p2').style.display='block';
+    }else{
+      document.getElementById('cm_desc').innerHTML='このPC（このブラウザ）では最初の1回だけ、合言葉を入れてください。<br>次からは開くだけで自動で連動します。';
+    }
+    document.getElementById('cm_p1').focus();
+  }).catch(function(){document.getElementById('cm_desc').textContent='インターネットに接続できません。';});
+  async function submit(){
+    var p1=document.getElementById('cm_p1').value.trim(),p2=document.getElementById('cm_p2').value.trim(),err=document.getElementById('cm_err');
+    if(p1.length<6){err.textContent='合言葉は6文字以上にしてください';return;}
+    if(mode==='init'&&p1!==p2){err.textContent='確認の合言葉が一致しません';return;}
+    err.textContent='確認中…';
+    try{
+      if(mode==='init'){var r0=await fetch(CLOUD_URL,{method:'POST',body:JSON.stringify({action:'init',pass:p1})}).then(function(r){return r.json();});if(!r0.ok){err.textContent=cloudErrMsg(r0.error);return;}}
+      var r1=await fetch(CLOUD_URL,{method:'POST',body:JSON.stringify({action:'check',pass:p1})}).then(function(r){return r.json();});
+      if(!r1.ok){err.textContent=cloudErrMsg(r1.error);return;}
+      cloudSetPass(p1);w.remove();cloudPull();
+    }catch(e){err.textContent='接続エラー：'+e.message;}
+  }
+  document.getElementById('cm_ok').onclick=submit;
+  w.addEventListener('keydown',function(e){if(e.key==='Enter')submit();});
+}
+async function cloudChangePass(){
+  var np=(document.getElementById('c_newpass')||{}).value||'';np=np.trim();
+  var st=document.getElementById('c_status');
+  if(np.length<6){st.textContent='新しい合言葉は6文字以上にしてください';return;}
+  try{var j=await cloudCall('changepass',{newPass:np});if(!j.ok){st.textContent=cloudErrMsg(j.error);return;}
+    cloudSetPass(np);document.getElementById('c_newpass').value='';st.textContent='合言葉を変更しました。ほかのPCでは次に開いたとき新しい合言葉を1回入れてください。';
+  }catch(e){st.textContent='エラー：'+e.message;}
+}
+function cloudForget(){cloudSetPass('');github.connected=false;setSync(false,'このPCの合言葉を消しました');}
+function cloudStart(){
+  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
+  if(cloudPass())cloudPull();else cloudAsk();
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible'&&github.connected&&cloudPass()&&Date.now()-(window.__lastEdit||0)>5000)cloudPull();
+  });
+}
 function setSync(on,msg){
   $('syncDot').className='dot'+(on?' on':'');
-  $('syncText').textContent=on?'連動中':(github.owner?'連携エラー':'未接続（このPCのみ保存）');
-  if($('g_status'))$('g_status').textContent=msg||'';
+  $('syncText').textContent=on?'連動中':(cloudPass()?'連携エラー':'未接続（合言葉が未入力）');
+  if($('g_status'))$('g_status').textContent=msg||'';if($('c_status'))$('c_status').textContent=msg||'';
 }
 async function saveGithubConfig(){
   github.owner=$('g_owner').value.trim();github.repo=$('g_repo').value.trim();
@@ -2295,8 +2407,7 @@ function renderAll(){renderHome();renderResidents();renderCreate();renderHistory
 function init(){
   loadLocal();loadCfg();
   fillSettingsForm();
-  if(github.owner&&github.token){pullNow();}else{setSync(false);}
-  keepStorage();
+  cloudStart();
   go('home');
   // ドロップ位置を外しても、ブラウザがファイルを開いて画面が飛ばないようにする
   ['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();},false));
