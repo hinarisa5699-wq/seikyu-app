@@ -766,6 +766,19 @@ async function pushNow(){
     setSync(true,'クラウドへ保存済み（'+new Date().toLocaleTimeString('ja-JP')+'）');
   }catch(e){setSync(false,'保存エラー：'+e.message);}
 }
+async function keepStorage(){
+  var persisted=false;
+  try{if(navigator.storage&&navigator.storage.persist){persisted=await navigator.storage.persist();}}catch(e){}
+  try{
+    var t=$('syncText');
+    if(t&&t.textContent.indexOf('未接続')===0){
+      t.textContent='未接続（このブラウザでは未設定）→クリックで設定';
+      t.title='Chromeのプロフィールが違う、または保存が消された可能性があります。デスクトップの「請求ツール（Chrome固定）」から開いてください。'+(persisted?'':'\n※Chromeの「ウィンドウを閉じるときにサイトデータを削除」がオンになっていないか確認してください。');
+      t.style.cursor='pointer';
+      t.onclick=function(){go('settings');try{showSet('github');}catch(e){}};
+    }
+  }catch(e){}
+}
 function setSync(on,msg){
   $('syncDot').className='dot'+(on?' on':'');
   $('syncText').textContent=on?'連動中':(github.owner?'連携エラー':'未接続（このPCのみ保存）');
@@ -2283,6 +2296,7 @@ function init(){
   loadLocal();loadCfg();
   fillSettingsForm();
   if(github.owner&&github.token){pullNow();}else{setSync(false);}
+  keepStorage();
   go('home');
   // ドロップ位置を外しても、ブラウザがファイルを開いて画面が飛ばないようにする
   ['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();},false));
