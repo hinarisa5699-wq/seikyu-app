@@ -302,7 +302,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <h3>④ 請求書を作成（1人ずつ）</h3>
       <p class="muted">デイサービス利用日は人によって違うので、③のカレンダーで各人の通所日を確認・調整してから、<b>1人ずつ</b>作成します。月と入居者を選んで「作成」を押すと、その方の請求書が<b>内容確認画面</b>で開きます（通所日のお昼・おやつは自動で除外）。金額を確認して「保存」してください。</p>
       <div class="grid2">
-        <div><label>対象月</label><input type="month" id="bc_month"></div>
+        <div><label>対象月</label><input type="month" id="bc_month" onchange="renderBatchKounetsu()"></div>
         <div><label>入居者</label><select id="bc_resident" onchange="updateBcKounetsu()"><option value="">— 選択 —</option></select></div>
       </div>
       <div class="grid2" style="margin-top:8px">
@@ -311,6 +311,13 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       </div>
       
       <div class="row-actions"><button class="btn" onclick="createOneInvoice()">この入居者の請求書を作成（内容確認へ）</button></div>
+      <div style="margin-top:18px;border-top:1px dashed #cfd8dc;padding-top:12px">
+        <b>全員分まとめて作成（光熱費込み）</b>
+        <p class="muted" style="margin:4px 0 8px">上の対象月の食事データに入っている入居者全員の請求書を、まとめて作成・保存します。光熱費（今月分）を1人ずつ入力してください。個人契約・外部の方は入力不要です。</p>
+        <div id="bat_kounetsu_list" class="muted">対象月を選ぶと、ここに対象の方の一覧が出ます。</div>
+        <div id="bat_err" style="display:none;color:#c62828;font-weight:bold;margin-top:6px"></div>
+        <div class="row-actions"><button class="btn" onclick="batchCreateWithKounetsu()">全員分まとめて作成（光熱費込み）</button></div>
+      </div>
       <div style="margin-top:12px"><b>取り込んだ月</b><div id="mc_saved" class="muted" style="margin-top:4px">まだ取り込まれた月はありません。</div></div><div style="margin-top:12px"><b>ファイル取込履歴（日時）</b><div id="importLogList" class="muted" style="margin-top:4px">まだ取込履歴はありません。</div></div>
     </div>
 
@@ -1198,7 +1205,7 @@ function saveMealImport(){
   alert('保存しました。'+ym+' の請求書・見積書で、この食事代が自動で反映されます。');
   renderSavedMeals();
 }
-function renderSavedMeals(){renderImportLog();
+function renderSavedMeals(){renderImportLog();setTimeout(renderBatchKounetsu,0);
   const keys=Object.keys(state.mealData||{}).sort().reverse();
   const el=$('mc_saved');
   if(!keys.length){el.innerHTML='まだ取り込まれた月はありません。';return;}
@@ -1216,7 +1223,7 @@ function renderSavedMeals(){renderImportLog();
 }
 function delMealImport(ym){if(!confirm(ym+' の食事データを削除しますか？'))return;delete state.mealData[ym];persist();renderSavedMeals();}
 // ④ 1人ずつ請求書を作成（内容確認画面を開く）
-function fillBcResident(){const sel=$('bc_resident');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.filter(r=>!r.otameshi).map(r=>`<option value="${r.id}">${esc(r.name)}（${esc(r.kubun)}${r.external?'・外部':''}${r.room?'・'+esc(r.room):''}）</option>`).join('');sel.value=cur;updateBcKounetsu();}
+function fillBcResident(){const sel=$('bc_resident');if(!sel)return;const cur=sel.value;sel.innerHTML='<option value="">— 選択 —</option>'+state.residents.filter(r=>!r.otameshi).map(r=>`<option value="${r.id}">${esc(r.name)}（${esc(r.kubun)}${r.external?'・外部':''}${r.room?'・'+esc(r.room):''}）</option>`).join('');sel.value=cur;updateBcKounetsu();renderBatchKounetsu();}
 function fmtMD(ds){const x=parseD(ds);return x?(x.getMonth()+1)+'/'+x.getDate():ds;}
 // 月途中で区分（生保⇄通常）が変わる方：期間ごとに単価を切り替えて日割り
 function buildSplitDoc(r,ym,segs){
@@ -1263,6 +1270,45 @@ function updateBcKounetsu(){
   k.disabled=free; if(free)k.value='';
   k.placeholder=free?('入力不要（'+(r.external?'外部の方':'個人契約')+'のため請求対象外）'):'例：12500';
   bcKounetsuErr('');
+}
+// ===== 全員分まとめて作成（光熱費込み） =====
+var _batKInput={}; // 入力途中の値（月を切り替えても消えないように）
+function batchTargets(ym){
+  const md=state.mealData&&state.mealData[ym]; if(!md)return null;
+  const names=new Set((md.people||[]).map(p=>nkey(p.name)));
+  return state.residents.filter(r=>names.has(nkey(r.name))&&!r.otameshi);
+}
+function batNeedsK(r){return !r.external&&r.kounetsu!=='個人契約';}
+function renderBatchKounetsu(){
+  const box=$('bat_kounetsu_list'); if(!box)return;
+  const ym=($('bc_month')||{}).value; batErr('');
+  if(!ym){box.innerHTML='対象月を選ぶと、ここに対象の方の一覧が出ます。';return;}
+  const t=batchTargets(ym);
+  if(!t){box.innerHTML=esc(ym)+' の食事データがまだ保存されていません（②で保存してください）。';return;}
+  if(!t.length){box.innerHTML='この月の食事データに一致する登録入居者がいません。';return;}
+  box.innerHTML='<table class="data"><thead><tr><th>入居者</th><th>光熱費（今月分）</th></tr></thead><tbody>'+t.map(r=>{
+    const need=batNeedsK(r), v=(_batKInput[ym]&&_batKInput[ym][r.id]!=null)?_batKInput[ym][r.id]:'';
+    return '<tr><td>'+esc(r.name)+'<span class="muted">（'+esc(r.kubun)+(r.external?'・外部':'')+(r.room?'・'+esc(r.room):'')+'）</span></td><td>'+
+      (need?'<input type="number" min="0" step="1" class="bat-k" data-rid="'+r.id+'" value="'+esc(String(v))+'" placeholder="例：12500" oninput="batKInput(this)" style="max-width:160px">'
+           :'<span class="muted">入力不要（'+(r.external?'外部の方':'個人契約')+'のため請求対象外）</span>')+'</td></tr>';
+  }).join('')+'</tbody></table>';
+}
+function batKInput(el){const ym=($('bc_month')||{}).value;if(!ym)return;(_batKInput[ym]=_batKInput[ym]||{})[el.dataset.rid]=el.value;el.style.borderColor='';batErr('');}
+function batErr(msg){const e=$('bat_err');if(!e)return;e.textContent=msg||'';e.style.display=msg?'':'none';}
+function batchCreateWithKounetsu(){
+  const ym=($('bc_month')||{}).value;
+  if(!ym){batErr('⚠ 対象月を選んでください。');return;}
+  const t=batchTargets(ym);
+  if(!t||!t.length){renderBatchKounetsu();batErr('⚠ この月の食事データ（②で保存）に一致する入居者がいません。');return;}
+  const map={}, missing=[];
+  document.querySelectorAll('#bat_kounetsu_list input.bat-k').forEach(el=>{
+    const v=String(el.value).trim();
+    if(v===''){missing.push((state.residents.find(r=>r.id===el.dataset.rid)||{}).name||'');el.style.borderColor='#c62828';}
+    else map[el.dataset.rid]=Math.max(0,Math.round(+v||0));
+  });
+  if(missing.length){batErr('⚠ 光熱費（今月分）が入力されていない方がいます：'+missing.join('、')+'（0円の場合は 0 を入力）');return;}
+  window._batKounetsu=map;
+  try{batchCreateForMonth(ym);}finally{window._batKounetsu=null;}
 }
 function createOneInvoice(){
   const ym=($('bc_month')||{}).value, rid=($('bc_resident')||{}).value;
@@ -1327,6 +1373,7 @@ function renderMealCsv(){
   renderDaycareCal();
   fillBcResident();
   if($('bc_month')&&!$('bc_month').value){const ks=Object.keys(state.mealData||{}).sort();if(ks.length)$('bc_month').value=ks[ks.length-1];else if($('mc_month')&&$('mc_month').value)$('bc_month').value=$('mc_month').value;}
+  renderBatchKounetsu();
 }
 /* ===== デイサービス利用日カレンダー ===== */
 function getDaycareDays(rid,ym){return (state.daycare&&state.daycare[ym]&&state.daycare[ym][rid])?state.daycare[ym][rid].slice():[];}
@@ -1597,6 +1644,7 @@ function kounetsuLine(r,type){
   if(r.kounetsu==='個人契約')return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:0,tekiyo:'個人契約のため請求対象外',inc:false};
   if(type==='mitsumori'||type==='mitsumori_s')return{name:'ガス・水道・電気（概算）',tanka:'－',qty:'－',kijun:'－',amount:+p.kounetsu,tekiyo:'光熱費の概算（実費精算）',inc:true};
   if(window._bcKounetsu!=null)return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:window._bcKounetsu,tekiyo:'光熱費（今月分・実費）',inc:true};
+  if(window._batKounetsu&&window._batKounetsu[r.id]!=null)return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:window._batKounetsu[r.id],tekiyo:'光熱費（今月分・実費）',inc:true};
   return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:0,tekiyo:'イケイケ立替・家賃と同時に口座引落し（実費）',inc:false};
 }
 function buildDoc(r,typeKey){
@@ -2466,6 +2514,7 @@ function jissekiAutoImport(){
     if($('mc_month'))$('mc_month').value=d.ym;
     if($('dc_month'))$('dc_month').value=d.ym;
     if($('bc_month'))$('bc_month').value=d.ym;
+    renderBatchKounetsu();
     renderDaycareCal();
     var ymJ=d.ym.slice(0,4)+'年'+(+d.ym.slice(5,7))+'月';
     jissekiBanner('✅ 実績確認アプリから <b>'+esc(ymJ)+'分</b> を読み込みました（食事注文CSV'+(d.meal_csv?'あり':'<b>なし</b>')+'・デイ通所日 '+entries.length+'名）。<br>'+
