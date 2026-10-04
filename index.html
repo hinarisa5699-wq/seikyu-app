@@ -305,6 +305,10 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
         <div><label>対象月</label><input type="month" id="bc_month"></div>
         <div><label>入居者</label><select id="bc_resident"><option value="">— 選択 —</option></select></div>
       </div>
+      <div class="grid2" style="margin-top:8px">
+        <div><label>光熱費（ガス・水道・電気／今月分・手入力）</label><input type="number" id="bc_kounetsu" min="0" step="1" placeholder="例：12500（個人契約の方は空欄でOK）"></div>
+        <div class="muted" style="align-self:end">光熱費は毎月の実費を入力してください。個人契約の方は請求対象外です。</div>
+      </div>
       
       <div class="row-actions"><button class="btn" onclick="createOneInvoice()">この入居者の請求書を作成（内容確認へ）</button></div>
       <div style="margin-top:12px"><b>取り込んだ月</b><div id="mc_saved" class="muted" style="margin-top:4px">まだ取り込まれた月はありません。</div></div><div style="margin-top:12px"><b>ファイル取込履歴（日時）</b><div id="importLogList" class="muted" style="margin-top:4px">まだ取込履歴はありません。</div></div>
@@ -1252,12 +1256,17 @@ function createOneInvoice(){
   if(!rid){alert('入居者を選んでください。');return;}
   const r=state.residents.find(x=>x.id===rid); if(!r)return;
   const typeKey=r.external?'gaibu_meal':(r.kubun==='生保'?'honnin':'seikyu_yachin');
+  // 光熱費（手入力）: イケイケ立替の方は必須。個人契約・外部の方は対象外
+  const kEl=$('bc_kounetsu'); const kRaw=kEl?String(kEl.value).trim():'';
+  const needK=!r.external&&r.kounetsu!=='個人契約';
+  if(needK&&kRaw===''){alert('光熱費（今月分）を入力してください。0円の場合は 0 と入力してください。');if(kEl)kEl.focus();return;}
+  window._bcKounetsu=(needK&&kRaw!=='')?Math.max(0,Math.round(+kRaw||0)):null;
   const pm=($('createMonth')||{}).value, pr=($('createResident')||{}).value, pmv=($('createMoveIn')||{}).value, pi=($('createIssue')||{}).value;
   if($('createMonth'))$('createMonth').value=ym;
   if($('createResident'))$('createResident').value=rid;
   if($('createMoveIn'))$('createMoveIn').value=r.movein||'';
   if($('createIssue'))$('createIssue').value=$('createIssue').value||todayStr();
-  currentDoc=buildDoc(r,typeKey);
+  try{currentDoc=buildDoc(r,typeKey);}finally{window._bcKounetsu=null;}
   currentDoc.number=ensureNumber(currentDoc,false);
   if($('createMonth'))$('createMonth').value=pm; if($('createResident'))$('createResident').value=pr; if($('createMoveIn'))$('createMoveIn').value=pmv; if($('createIssue'))$('createIssue').value=pi;
   fillDocForm();openModal('docModal');renderDocPreview();
@@ -1572,6 +1581,7 @@ function kounetsuLine(r,type){
   const p=state.settings.prices;
   if(r.kounetsu==='個人契約')return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:0,tekiyo:'個人契約のため請求対象外',inc:false};
   if(type==='mitsumori'||type==='mitsumori_s')return{name:'ガス・水道・電気（概算）',tanka:'－',qty:'－',kijun:'－',amount:+p.kounetsu,tekiyo:'光熱費の概算（実費精算）',inc:true};
+  if(window._bcKounetsu!=null)return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:window._bcKounetsu,tekiyo:'光熱費（今月分・実費）',inc:true};
   return{name:'ガス・水道・電気',tanka:'－',qty:'－',kijun:'－',amount:0,tekiyo:'イケイケ立替・家賃と同時に口座引落し（実費）',inc:false};
 }
 function buildDoc(r,typeKey){
@@ -2404,11 +2414,56 @@ function importBackup(e){
    初期化
    ============================================================ */
 function renderAll(){renderHome();renderResidents();renderCreate();renderHistory();fillSettingsForm();}
+/* ===== 実績確認アプリ（デイ）との連動 =====
+   実績確認アプリの「請求書作成ツールを開く」から来たとき（#jisseki=読み込み先）、
+   食事注文CSVとデイの通所日を自動で読み込み、②保存・③反映の画面まで進める。
+   保存・反映は今まで通り人が確認してから押す。 */
+var JISSEKI_SRC_OK=/^https:\/\/(jisseki-app\.hinarisa5699\.workers\.dev|jisseki-app-ipql\.onrender\.com)\/day\/seikyu-export\.json$/;
+function jissekiBanner(html,isErr){
+  var box=$('jisseki_banner');
+  if(!box){box=document.createElement('div');box.id='jisseki_banner';box.className='hint';var tab=$('tab-mealcsv');if(tab)tab.insertBefore(box,tab.firstChild);}
+  box.style.border='2px solid '+(isErr?'#c62828':'#2e7d32');box.style.background=isErr?'#ffebee':'#e8f5e9';box.style.marginBottom='12px';
+  box.innerHTML=html;
+}
+function jissekiAutoImport(){
+  var m=(location.hash||'').match(/[#&]jisseki=([^&]+)/);if(!m)return;
+  var src='';try{src=decodeURIComponent(m[1]);}catch(e){}
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){} // 再読込で二重に読み込まない
+  go('mealcsv');
+  if(!JISSEKI_SRC_OK.test(src)){jissekiBanner('実績確認アプリの読み込み先が正しくありません。実績確認アプリのボタンから開き直してください。',true);return;}
+  jissekiBanner('実績確認アプリからデイの通所日と食事注文CSVを読み込んでいます…');
+  fetch(src,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(d){
+    if(!d||!d.ym)throw new Error(d&&d.error?d.error:'データがありません');
+    var norm=function(s){return String(s||'').replace(/[\s　]/g,'');};
+    if(d.meal_csv)processMealCsv(d.meal_csv);
+    var entries=[],miss=[];
+    (d.daycare||[]).forEach(function(x){
+      var nn=norm(x.name);var r=state.residents.find(function(r){return norm(r.name)===nn;});
+      if(!r){miss.push(x.name);return;}
+      var days=(x.days||[]).map(Number).sort(function(a,b){return a-b;});
+      // 絶対ルール: 通所日は昼食・おやつの両方を除外する
+      entries.push({ym:d.ym,residentId:r.id,name:r.name,hiru:days.slice(),oya:days.slice(),attend:days.slice()});
+    });
+    _pdfDaycare={entries:entries,months:[d.ym],ym:d.ym,_fname:'実績確認アプリ（デイ通所日）',importedAt:nowStamp(),docHint:''};
+    saveImportLS();
+    if($('dc_pdfCard'))$('dc_pdfCard').style.display='';
+    renderPdfDaycarePreview(_pdfDaycare,_pdfDaycare._fname);
+    if($('mc_month'))$('mc_month').value=d.ym;
+    if($('dc_month'))$('dc_month').value=d.ym;
+    if($('bc_month'))$('bc_month').value=d.ym;
+    renderDaycareCal();
+    var ymJ=d.ym.slice(0,4)+'年'+(+d.ym.slice(5,7))+'月';
+    jissekiBanner('✅ 実績確認アプリから <b>'+esc(ymJ)+'分</b> を読み込みました（食事注文CSV'+(d.meal_csv?'あり':'<b>なし</b>')+'・デイ通所日 '+entries.length+'名）。<br>'+
+      'このあと <b>「② この月のデータとして保存」</b> → <b>「③ この通所日をカレンダーに反映」</b> を押し、④で<b>光熱費を入力</b>して請求書を作成してください。'+
+      (miss.length?'<br><span class="muted">入居者として登録されていない方（デイのみ利用の方など）はスキップしました：'+esc(miss.join('、'))+'</span>':''));
+  }).catch(function(e){jissekiBanner('実績確認アプリから読み込めませんでした：'+esc(e&&e.message||String(e))+'<br>実績確認アプリが開けるか確認してから、もう一度ボタンを押してください。',true);});
+}
 function init(){
   loadLocal();loadCfg();
   fillSettingsForm();
   cloudStart();
   go('home');
+  setTimeout(jissekiAutoImport,300); // 実績確認アプリ（デイ）から来たときの自動読み込み
   // ドロップ位置を外しても、ブラウザがファイルを開いて画面が飛ばないようにする
   ['dragover','drop'].forEach(ev=>window.addEventListener(ev,e=>{e.preventDefault();},false));
   // モーダル背景クリックで閉じない（誤操作防止）
