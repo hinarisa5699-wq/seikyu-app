@@ -602,7 +602,7 @@ details.help summary{cursor:pointer;font-weight:700;color:var(--brand-d)}
       <div><label>宛先区分</label><select id="rm_atesaki"><option value="請求先">請求先／担当者あて</option><option value="ご家族">ご家族あて</option></select></div>
     </div>
     <div class="grid2">
-      <div><label>支払方法</label><select id="rm_pay"><option value="振込">振込（振込先を表示）</option><option value="引落し">引落し（口座振替・振込先を表示しない）</option></select></div>
+      <div><label>支払方法</label><select id="rm_pay"><option value="振込">振込（振込先を表示）</option><option value="引落し">引落し（口座振替・振込先を表示しない）</option><option value="集金">集金（訪問集金・振込先を表示しない）</option></select></div>
       <div><label>書類の名称</label><select id="rm_title"><option value="請求書">請求書</option><option value="明細書">明細書</option></select></div>
     </div>
     <div class="muted" style="margin-top:4px">※「引落し」は口座振替の方（振込先を出さず「口座振替（自動引落し）」と記載）。「明細書」は請求書の代わりに明細書として発行します。</div>
@@ -1253,7 +1253,7 @@ function buildSplitDoc(r,ym,segs){
     items, total,
     notes:['月途中で区分（生保／通常）が変わるため、期間ごとに単価を切り替えて日割りしています。','家賃・共益費は非課税、生活支援サービス費・食費は課税。','光熱費はイケイケ立替・家賃と同時に口座引落し（実費）。','生保期間の家賃は本来「援護課あて」です。援護課へ別途ご請求の場合はその行を外してください。'],
     dueLabel:'お支払期限', due:endOfMonth(monthD).toISOString().slice(0,10),
-    showBank:(r.pay!=='引落し'), lead:'下記のとおりご請求申し上げます。【請求区分：'+(monthD.getMonth()+1)+'月分 利用料（区分切替・日割り）】',
+    showBank:(r.pay!=='引落し'&&r.pay!=='集金'), lead:'下記のとおりご請求申し上げます。【請求区分：'+(monthD.getMonth()+1)+'月分 利用料（区分切替・日割り）】',
     receiptAmt:null, tadashi:''
   };
 }
@@ -1836,7 +1836,7 @@ function buildDoc(r,typeKey){
   let _payMode=r.pay||'振込';if(typeKey==='engo'||typeKey==='engo_shokai'||typeKey==='mitsumori_s'||typeKey==='ryoshu_engo')_payMode='振込';
   const _titleMode=r.titleMode||'請求書';
   // 引落しの方は振込先を出さない（口座振替の記載に切替）。援護課あて等は従来どおり。
-  if(_payMode==='引落し'&&!_isRcpt&&(typeKey==='honnin'||typeKey==='seikyu_yachin'||typeKey==='seikyu_nyukin'||typeKey==='zantei'))showBank=false;
+  if((_payMode==='引落し'||_payMode==='集金')&&!_isRcpt&&(typeKey==='honnin'||typeKey==='seikyu_yachin'||typeKey==='seikyu_nyukin'||typeKey==='zantei'))showBank=false;
   // 明細書指定なら見積・領収以外のタイトルを「明細書」に
   const _effTitle=(!_isRcpt&&_titleMode==='明細書'&&t.docTitle.indexOf('見積')<0)?'明 細 書':t.docTitle;
   return{
@@ -1980,7 +1980,7 @@ function applyDocType(d,kind){
   const map={'請求書':'請 求 書','見積書':'見 積 書','明細書':'明 細 書'};
   d.docTitle=map[kind]||'請 求 書';
   d.titleMode=(kind==='明細書')?'明細書':'請求書';
-  d.docKind=kind;
+  d.docKind=kind;if(d.typeLabel){d.typeLabel=d.typeLabel.replace(/請求書|見積書|明細書/,kind);}
 }
 function onDocTypeChange(){
   if(!currentDoc)return;
@@ -2103,10 +2103,10 @@ function docHTML(d){
           <tr class="grand"><td colspan="4">合計（税込）</td><td class="n">${num(d.total)}</td><td></td></tr>
         </tbody>
       </table>
-      ${d.payMode==='引落し'&&isSeikyu?`
+      ${(d.payMode==='引落し'||d.payMode==='集金')&&isSeikyu?`
       <div class="bank">
-        <div><b>【お支払い方法】</b> お支払いは口座振替（自動引落し）です。ご登録の口座から自動で引き落とされます。</div>
-        ${dueD2?`<div style="margin-top:4px"><b>${esc(d.dueLabel||'引落し日')}：</b>${esc(fmtWareki(dueD2))}</div>`:''}
+        <div><b>【お支払い方法】</b> お支払いは${d.payMode==='集金'?'集金にてお伺いいたします。':'口座振替（自動引落し）です。ご登録の口座から自動で引き落とされます。'}</div>
+        ${dueD2?`<div style="margin-top:4px"><b>${esc(d.dueLabel||(d.payMode==='集金'?'集金予定日':'引落し日'))}：</b>${esc(fmtWareki(dueD2))}</div>`:''}
       </div>`:(d.showBank&&isSeikyu?`
       <div class="bank">
         <div>${esc(b.notice)}</div>
