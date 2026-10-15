@@ -947,7 +947,7 @@ function renderHome(){
   const r=state.residents;
   $('homeResidents').innerHTML=r.length? r.map(x=>`<span class="pill">${esc(x.name)} <span class="badge ${x.kubun==='生保'?'seiho':'normal'}">${x.kubun}</span></span>`).join('') : '未登録';
   const docs=[...state.documents].sort((a,b)=>b.issue.localeCompare(a.issue)).slice(0,6);
-  $('homeDocs').innerHTML=docs.length? docs.map(d=>`<div>・${esc(d.issue)}　${esc(d.typeLabel)}　${esc(d.residentName)}　<b>${yen(d.total)}</b></div>`).join('') : 'まだありません';
+  $('homeDocs').innerHTML=docs.length? docs.map(d=>`<div>・${esc(d.issue)}　${esc(dispType(d))}　${esc(d.residentName)}　<b>${yen(d.total)}</b></div>`).join('') : 'まだありません';
 }
 
 /* ============================================================
@@ -2134,6 +2134,7 @@ function fillResidentSelect(selId){
   sel.innerHTML='<option value="">すべての対象者</option>'+state.residents.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('');
   if([...sel.options].some(o=>o.value===cur))sel.value=cur;
 }
+function dispType(d){var k=((d&&d.docTitle)||'').replace(/\s/g,'');var tl=(d&&d.typeLabel)||'';if(k&&/請求書|見積書|明細書|領収書/.test(tl))return tl.replace(/請求書|見積書|明細書|領収書/,k);return tl||k;}
 function renderHistory(){
   const q=($('historySearch').value||'').trim();
   fillMonthSelect('historyMonth',state.documents);
@@ -2157,7 +2158,7 @@ function renderHistory(){
               :`<button class="btn sm" onclick="sendDoc('${d.id}')">発送</button>`);
     return `<tr>
     <td class="muted" style="font-size:12px;white-space:nowrap">${esc(d.savedAt||(d.issue?d.issue+'（作成）':'—'))}</td>
-    <td>${esc(docYm(d))}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
+    <td>${esc(docYm(d))}</td><td>${esc(dispType(d))}</td><td>${esc(d.number)}</td>
     <td>${esc(d.residentName)}</td><td>${yen(d.total)}</td>
     <td>${sendCell}</td>
     <td><button class="btn sec sm" onclick="viewDoc('${d.id}')">表示/印刷</button>
@@ -2189,7 +2190,7 @@ function renderPayments(){
   $('paySummary').innerHTML=`対象 ${docs.length} 件　／　未入金 <b style="color:var(--warn)">${yen(unpaidTotal)}</b>　入金済 <b style="color:var(--ok)">${yen(paidTotal)}</b>`;
   const tb=$('payTable').querySelector('tbody');
   tb.innerHTML=docs.map(d=>`<tr>
-    <td>${esc(docYm(d))}</td><td>${esc(d.typeLabel)}</td><td>${esc(d.number)}</td>
+    <td>${esc(docYm(d))}</td><td>${esc(dispType(d))}</td><td>${esc(d.number)}</td>
     <td>${esc(d.residentName||d.to||'')}</td><td>${yen(d.total)}</td>
     <td>${d.paid?'<span class="badge normal">入金済</span>':'<span class="badge seiho">未入金</span>'}</td>
     <td><input type="date" value="${esc(d.paidDate||'')}" onchange="setPaidDate('${d.id}',this.value)" style="max-width:150px"></td>
