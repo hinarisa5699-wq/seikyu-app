@@ -2379,7 +2379,7 @@ function docFileName(d){
   const tl=clean(d.typeLabel);  // 具体的な種類名
   // 表示中のタイトルの種類がtypeLabelに含まれていればtypeLabel（具体的）、違えばタイトル優先
   const type=(dt&&tl.indexOf(dt)<0)?dt:(tl||dt);
-  const name=clean(d.residentName||d.to);
+  const name=d.residentName?clean(d.residentName)+'様':clean(d.to); // 入居者名には「様」を付ける
   return [ymTxt,type,name].filter(Boolean).join('_')||'書類';
 }
 function doPrint(){
