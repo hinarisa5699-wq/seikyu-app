@@ -1474,12 +1474,12 @@ function parseDaycareFromLines(rows){
       });
     });
   }else{
-    var curYm=null,current2=null;
+    var curYm=null,current2=null,curNo=null;/*dcfix-noreset*/
     texts.forEach(function(l){
       var mm=l.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*分/);
       if(mm){curYm=(2018+parseInt(mm[1],10))+'-'+pad2(parseInt(mm[2],10));}
       var ln=norm(l);
-      resList.forEach(function(x){if(ln.indexOf(x.nn+'様')>=0)current2=x.r;});
+      var noM=l.match(/No\.\s*(\d{6,})/);if(noM&&noM[1]!==curNo){curNo=noM[1];current2=null;}var hm=ln.match(/^(.+?)様令和\d+年\d+月分サービス利用明細書/);if(hm){var hx=resList.find(function(x){return x.nn===hm[1];});current2=hx?hx.r:null;}resList.forEach(function(x){if(ln.indexOf(x.nn+'様')>=0)current2=x.r;});
       if(!current2||!curYm)return;
       var dm=l.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
       if(!dm)return;
