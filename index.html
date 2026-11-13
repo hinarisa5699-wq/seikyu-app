@@ -1620,7 +1620,7 @@ function importMealLines(p,label){
   add('昼食',p.hiruCount,p.hiruAmt,'食',p.hiruDays);
   add('夕食',p.yoruCount,p.yoruAmt,'食',p.yoruDays);
   add('弁当',p.bentoCount,p.bentoAmt,'食',p.bentoDays);
-  add('おやつ',p.oyaCount,p.oyaAmt,'食',p.oyaDays);
+  /*nooyatsu: おやつはデイの日のみ提供のためハウスの書類には入れない*/
   add('飲み物',p.drinkCount,p.drinkAmt,'回',p.drinkDays);
   add('配膳下膳',p.haizenCount,p.haizenAmt,'回',p.haizenDays);
   return rows;
@@ -1636,7 +1636,7 @@ function mealLines(r,count,label,dcHiru,dcOya){
   add('朝食'+(label?`（${label}）`:''),m.asa,m.asaH,m.asaReq!==false); // 朝食は必須
   add('昼食'+(label?`（${label}）`:''),m.hiru,m.hiruH,false,hiruDays);
   add('夕食'+(label?`（${label}）`:''),m.yoru,m.yoruH,false);
-  add('おやつ'+(label?`（${label}）`:''),m.oya,m.oyaH,false,oyaDays);
+  /*nooyatsu*/
   return rows;
 }
 function kounetsuLine(r,type){
